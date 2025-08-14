@@ -1,0 +1,1 @@
+add_library(irre_core STATIC irre.cpp irre.hpp)
