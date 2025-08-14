@@ -6,7 +6,7 @@
 
 using namespace irre;
 
-// Helper function to test round-trip encoding/decoding
+// helper function to test round-trip encoding/decoding
 auto test_round_trip = [](const instruction& inst) {
   word encoded = codec::encode(inst);
   auto decoded = codec::decode(encoded);
@@ -14,7 +14,7 @@ auto test_round_trip = [](const instruction& inst) {
   word re_encoded = codec::encode(decoded.value());
   REQUIRE(encoded == re_encoded);
 
-  // Also test that opcodes match
+  // also test that opcodes match
   REQUIRE(get_opcode(inst) == get_opcode(decoded.value()));
 };
 
@@ -46,7 +46,7 @@ TEST_CASE("Instruction format: inst_op") {
 
 TEST_CASE("Instruction format: inst_op_reg") {
   SECTION("jmp with various registers") {
-    // Test with different register types
+    // test with different register types
     std::vector<reg> test_regs = {
         reg::r0, reg::r15, reg::r31,                  // GPRs
         reg::pc, reg::lr,  reg::ad,  reg::at, reg::sp // Special registers
@@ -57,7 +57,7 @@ TEST_CASE("Instruction format: inst_op_reg") {
       test_round_trip(inst);
 
       word encoded = codec::encode(inst);
-      // Check opcode (0x21) and register placement
+      // check opcode (0x21) and register placement
       REQUIRE(((encoded >> 24) & 0xff) == 0x21);
       REQUIRE(((encoded >> 16) & 0xff) == static_cast<uint8_t>(r));
     }
@@ -271,7 +271,7 @@ TEST_CASE("Byte-level encoding") {
     REQUIRE(bytes[2] == ((w >> 16) & 0xff)); // bits 23-16
     REQUIRE(bytes[3] == ((w >> 24) & 0xff)); // bits 31-24
 
-    // Test round-trip through bytes
+    // test round-trip through bytes
     auto decoded = codec::decode_bytes(bytes);
     REQUIRE(decoded.is_ok());
     REQUIRE(codec::encode(decoded.value()) == w);
@@ -293,7 +293,7 @@ TEST_CASE("Register validation") {
   for (const auto& tc : cases) {
     INFO("Testing register value: " << static_cast<int>(tc.value) << " (" << tc.name << ")");
 
-    // Test with mov instruction (requires 2 registers)
+    // test with mov instruction (requires 2 registers)
     word w = (0x0c << 24) | (tc.value << 16) | (0x01 << 8); // mov rX, r1
     auto result = codec::decode(w);
 

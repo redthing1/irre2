@@ -1,5 +1,5 @@
-// Test main entry point for IRRE tests
-// This provides the main() function for our tests
+// test main entry point for IRRE tests
+// this provides the main() function for our tests
 
 #include <catch2/catch_session.hpp>
 

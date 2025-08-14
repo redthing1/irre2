@@ -9,10 +9,10 @@ namespace irre::semantics {
 
 // data flow analysis results
 struct data_flow {
-  std::vector<reg> reads;    // registers read by this instruction
-  std::vector<reg> writes;   // registers written by this instruction
-  bool reads_memory;         // does this instruction read from memory?
-  bool writes_memory;        // does this instruction write to memory?
+  std::vector<reg> reads;  // registers read by this instruction
+  std::vector<reg> writes; // registers written by this instruction
+  bool reads_memory;       // does this instruction read from memory?
+  bool writes_memory;      // does this instruction write to memory?
 };
 
 // analyze data flow for an instruction

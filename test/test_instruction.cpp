@@ -17,7 +17,7 @@ TEST_CASE("Instruction construction helpers") {
     REQUIRE(get_opcode(inst) == opcode::add);
     REQUIRE(get_format(inst) == format::op_reg_reg_reg);
 
-    // Verify the instruction contains the right registers
+    // verify the instruction contains the right registers
     auto add_inst = std::get<inst_op_reg_reg_reg>(inst);
     REQUIRE(add_inst.op == opcode::add);
     REQUIRE(add_inst.a == reg::r1);
@@ -39,7 +39,7 @@ TEST_CASE("Instruction construction helpers") {
 
 TEST_CASE("Instruction variant handling") {
   SECTION("std::variant holds correct types") {
-    // Test that we can construct and hold each instruction type
+    // test that we can construct and hold each instruction type
     instruction inst1 = inst_op{opcode::nop};
     instruction inst2 = inst_op_reg{opcode::jmp, reg::r0};
     instruction inst3 = inst_op_imm24{opcode::jmi, 0x123456};
@@ -49,7 +49,7 @@ TEST_CASE("Instruction variant handling") {
     instruction inst7 = inst_op_reg_imm8x2{opcode::sia, reg::r1, 0x10, 0x04};
     instruction inst8 = inst_op_reg_reg_reg{opcode::add, reg::r1, reg::r2, reg::r3};
 
-    // Test that we can extract opcodes from all variants
+    // test that we can extract opcodes from all variants
     REQUIRE(get_opcode(inst1) == opcode::nop);
     REQUIRE(get_opcode(inst2) == opcode::jmp);
     REQUIRE(get_opcode(inst3) == opcode::jmi);
@@ -124,7 +124,7 @@ TEST_CASE("Individual instruction format decoding") {
     REQUIRE(inst.addr == 0x123456);
     REQUIRE(inst.encode() == w);
 
-    // Test 24-bit masking
+    // test 24-bit masking
     word w2 = 0x20ffffff; // jmi 0xffffff (max 24-bit)
     auto inst2 = inst_op_imm24::decode(w2);
     REQUIRE(inst2.addr == 0xffffff);
@@ -193,13 +193,13 @@ TEST_CASE("Register name utility") {
   }
 
   SECTION("register classification helpers") {
-    // Test GPR classification
+    // test GPR classification
     REQUIRE(is_gpr(reg::r0) == true);
     REQUIRE(is_gpr(reg::r31) == true);
     REQUIRE(is_gpr(reg::pc) == false);
     REQUIRE(is_gpr(reg::sp) == false);
 
-    // Test special register classification
+    // test special register classification
     REQUIRE(is_special(reg::r0) == false);
     REQUIRE(is_special(reg::r31) == false);
     REQUIRE(is_special(reg::pc) == true);
@@ -210,7 +210,7 @@ TEST_CASE("Register name utility") {
 
 TEST_CASE("All convenience constructors") {
   SECTION("Basic operations") {
-    // Test that all convenience constructors work and produce correct opcodes
+    // test that all convenience constructors work and produce correct opcodes
     REQUIRE(get_opcode(make::nop()) == opcode::nop);
     REQUIRE(get_opcode(make::hlt()) == opcode::hlt);
     REQUIRE(get_opcode(make::ret()) == opcode::ret);
