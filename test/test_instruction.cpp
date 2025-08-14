@@ -255,45 +255,45 @@ TEST_CASE("Instruction formatting") {
     // op format (no args)
     auto nop_inst = make::nop();
     REQUIRE(format_instruction(nop_inst) == "nop");
-    
+
     auto hlt_inst = make::hlt();
     REQUIRE(format_instruction(hlt_inst) == "hlt");
-    
+
     auto ret_inst = make::ret();
     REQUIRE(format_instruction(ret_inst) == "ret");
 
     // op_reg format
     auto jmp_inst = make::jmp(reg::r5);
     REQUIRE(format_instruction(jmp_inst) == "jmp r5");
-    
+
     auto cal_inst = make::cal(reg::lr);
     REQUIRE(format_instruction(cal_inst) == "cal lr");
 
     // op_imm24 format (24-bit hex with 0x prefix)
     auto jmi_inst = make::jmi(0x123456);
     REQUIRE(format_instruction(jmi_inst) == "jmi 0x123456");
-    
+
     auto int_inst = make::int_(0xabcdef);
     REQUIRE(format_instruction(int_inst) == "int 0xabcdef");
 
     // op_reg_imm16 format (16-bit hex)
     auto set_inst = make::set(reg::r0, 0x1234);
     REQUIRE(format_instruction(set_inst) == "set r0 0x1234");
-    
+
     auto sup_inst = make::sup(reg::sp, 0xffff);
     REQUIRE(format_instruction(sup_inst) == "sup sp 0xffff");
 
     // op_reg_reg format
     auto mov_inst = make::mov(reg::r1, reg::r2);
     REQUIRE(format_instruction(mov_inst) == "mov r1 r2");
-    
+
     auto not_inst = make::not_(reg::at, reg::pc);
     REQUIRE(format_instruction(not_inst) == "not at pc");
 
     // op_reg_reg_imm8 format (8-bit hex)
     auto ldw_inst = make::ldw(reg::r3, reg::sp, 0x10);
     REQUIRE(format_instruction(ldw_inst) == "ldw r3 sp 0x10");
-    
+
     auto stw_inst = make::stw(reg::r15, reg::r20, 0xff);
     REQUIRE(format_instruction(stw_inst) == "stw r15 r20 0xff");
 
@@ -304,7 +304,7 @@ TEST_CASE("Instruction formatting") {
     // op_reg_reg_reg format
     auto add_inst = make::add(reg::r1, reg::r2, reg::r3);
     REQUIRE(format_instruction(add_inst) == "add r1 r2 r3");
-    
+
     auto mul_inst = make::mul(reg::r10, reg::r11, reg::r12);
     REQUIRE(format_instruction(mul_inst) == "mul r10 r11 r12");
   }
@@ -313,20 +313,20 @@ TEST_CASE("Instruction formatting") {
     // test with zero values
     auto set_zero = make::set(reg::r0, 0x0000);
     REQUIRE(format_instruction(set_zero) == "set r0 0x0000");
-    
+
     auto jmi_zero = make::jmi(0x000000);
     REQUIRE(format_instruction(jmi_zero) == "jmi 0x000000");
-    
+
     auto ldw_zero = make::ldw(reg::r0, reg::r0, 0x00);
     REQUIRE(format_instruction(ldw_zero) == "ldw r0 r0 0x00");
 
     // test with max values
     auto set_max16 = make::set(reg::r31, 0xffff);
     REQUIRE(format_instruction(set_max16) == "set r31 0xffff");
-    
+
     auto jmi_max24 = make::jmi(0xffffff);
     REQUIRE(format_instruction(jmi_max24) == "jmi 0xffffff");
-    
+
     auto sia_max8 = make::sia(reg::r31, 0xff, 0xff);
     REQUIRE(format_instruction(sia_max8) == "sia r31 0xff 0xff");
   }
