@@ -54,3 +54,10 @@ add_subdirectory(src/irre_asm)
 add_subdirectory(src/irre_disasm)
 add_subdirectory(src/irre_emu)
 add_subdirectory(src/irre_cc)
+
+# Testing
+option(BUILD_TESTING "Enable testing" ON)
+if(BUILD_TESTING)
+    enable_testing()
+    add_subdirectory(test)
+endif()

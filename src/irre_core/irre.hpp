@@ -1,3 +1,7 @@
 #pragma once
 
-// irre core library placeholder
+#include "types.hpp"
+#include "util.hpp"
+#include "instruction.hpp"
+#include "encoding.hpp"
+#include "semantics.hpp"
