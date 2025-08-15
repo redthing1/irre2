@@ -9,6 +9,8 @@ add_library(irre_core STATIC
   assembler/symbols.hpp
   assembler/object.cpp
   assembler/object.hpp
+  assembler/disassembler.cpp
+  assembler/disassembler.hpp
 )
 
 # link with PEGTL for parsing

@@ -29,10 +29,17 @@ endif()
 find_program(CLANG_FORMAT_EXE NAMES "clang-format")
 if(CLANG_FORMAT_EXE)
     message(STATUS "Found clang-format: ${CLANG_FORMAT_EXE}")
+    # collect all source files, excluding third_party
     file(GLOB_RECURSE ALL_SOURCE_FILES 
          ${CMAKE_SOURCE_DIR}/src/irre_*/*.cpp
          ${CMAKE_SOURCE_DIR}/src/irre_*/*.hpp
-         ${CMAKE_SOURCE_DIR}/src/irre_*/*.h)
+         ${CMAKE_SOURCE_DIR}/src/irre_*/*.h
+         ${CMAKE_SOURCE_DIR}/test/*.cpp
+         ${CMAKE_SOURCE_DIR}/test/*.hpp
+         ${CMAKE_SOURCE_DIR}/test/*.h)
+    
+    # filter out third_party files
+    list(FILTER ALL_SOURCE_FILES EXCLUDE REGEX ".*third_party.*")
     
     # target to format code in-place
     add_custom_target(format

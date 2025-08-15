@@ -2,20 +2,42 @@
 #include <fstream>
 #include <string>
 #include "../irre_core/assembler/assembler.hpp"
+#include "../third_party/args_cpp/args.hpp"
+
+namespace {
+args::Group arguments("arguments");
+args::HelpFlag help_flag(arguments, "help", "show help information", {'h', "help"});
+} // namespace
 
 int main(int argc, char* argv[]) {
-  if (argc != 3) {
-    std::cerr << "usage: " << argv[0] << " <input.asm> <output.obj>" << std::endl;
+  args::ArgumentParser parser("irre v2.x assembler", "assembles irre assembly source code into object files");
+  parser.helpParams.showTerminator = false;
+
+  args::GlobalOptions globals(parser, arguments);
+  args::Positional<std::string> input_file(parser, "input", "input assembly file (.asm)");
+  args::Positional<std::string> output_file(parser, "output", "output object file (.o, .obj)");
+
+  try {
+    parser.ParseCLI(argc, argv);
+  } catch (args::Help) {
+    std::cout << parser;
+    return 0;
+  } catch (args::Error& e) {
+    std::cerr << "error: " << e.what() << std::endl;
+    std::cerr << parser;
     return 1;
   }
 
-  const std::string input_file = argv[1];
-  const std::string output_file = argv[2];
+  if (!input_file || !output_file) {
+    std::cerr << "error: both input and output files are required" << std::endl;
+    std::cerr << parser;
+    return 1;
+  }
 
   // read input file
-  std::ifstream file(input_file);
+  std::ifstream file(args::get(input_file));
   if (!file) {
-    std::cerr << "error: cannot open input file: " << input_file << std::endl;
+    std::cerr << "error: cannot open input file: " << args::get(input_file) << std::endl;
     return 1;
   }
 
@@ -37,16 +59,17 @@ int main(int argc, char* argv[]) {
   auto obj = result.value();
   auto binary = obj.to_binary();
 
-  std::ofstream out(output_file, std::ios::binary);
+  std::ofstream out(args::get(output_file), std::ios::binary);
   if (!out) {
-    std::cerr << "error: cannot create output file: " << output_file << std::endl;
+    std::cerr << "error: cannot create output file: " << args::get(output_file) << std::endl;
     return 1;
   }
 
   out.write(reinterpret_cast<const char*>(binary.data()), binary.size());
   out.close();
 
-  std::cout << "assembled " << input_file << " -> " << output_file << " (" << binary.size() << " bytes)" << std::endl;
+  std::cout << "assembled " << args::get(input_file) << " -> " << args::get(output_file) << " (" << binary.size()
+            << " bytes)" << std::endl;
 
   return 0;
 }
