@@ -1,6 +1,6 @@
 #pragma once
 
-#include "../instruction.hpp"
+#include "../arch/instruction.hpp"
 #include "../util.hpp"
 #include "object.hpp"
 #include <string>

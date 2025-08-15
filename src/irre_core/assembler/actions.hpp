@@ -2,7 +2,7 @@
 
 #include "grammar.hpp"
 #include "object.hpp"
-#include "../instruction.hpp"
+#include "../arch/instruction.hpp"
 #include <tao/pegtl.hpp>
 #include <string>
 #include <vector>

@@ -1,7 +1,7 @@
 #pragma once
 
 #include <tao/pegtl.hpp>
-#include "../types.hpp"
+#include "../arch/types.hpp"
 
 namespace irre::assembler::grammar {
 

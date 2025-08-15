@@ -1,7 +1,7 @@
 #pragma once
 
-#include "../types.hpp"
-#include "../instruction.hpp"
+#include "../arch/types.hpp"
+#include "../arch/instruction.hpp"
 #include "../util.hpp"
 #include <vector>
 #include <variant>

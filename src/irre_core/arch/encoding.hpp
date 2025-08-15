@@ -1,7 +1,7 @@
 #pragma once
 
 #include "instruction.hpp"
-#include "util.hpp"
+#include "../util.hpp"
 #include <array>
 #include <vector>
 

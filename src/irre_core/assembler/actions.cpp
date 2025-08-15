@@ -1,5 +1,5 @@
 #include "actions.hpp"
-#include "../encoding.hpp"
+#include "../arch/encoding.hpp"
 
 namespace irre::assembler::actions {
 

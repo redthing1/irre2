@@ -1,5 +1,10 @@
 add_library(irre_core STATIC 
   irre.cpp irre.hpp
+  util.hpp
+  arch/types.hpp
+  arch/instruction.hpp
+  arch/encoding.hpp
+  arch/semantics.hpp
   assembler/assembler.cpp
   assembler/assembler.hpp
   assembler/grammar.hpp

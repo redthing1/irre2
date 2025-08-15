@@ -1,8 +1,8 @@
 #pragma once
 
-#include "../types.hpp"
-#include "../instruction.hpp"
-#include "../encoding.hpp"
+#include "../arch/types.hpp"
+#include "../arch/instruction.hpp"
+#include "../arch/encoding.hpp"
 #include "../util.hpp"
 #include "object.hpp"
 #include <vector>

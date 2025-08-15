@@ -1,5 +1,5 @@
 #include "symbols.hpp"
-#include "../instruction.hpp"
+#include "../arch/instruction.hpp"
 
 namespace irre::assembler {
 

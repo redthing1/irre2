@@ -2,7 +2,7 @@
 #include "grammar.hpp"
 #include "actions.hpp"
 #include "symbols.hpp"
-#include "../encoding.hpp"
+#include "../arch/encoding.hpp"
 #include <tao/pegtl.hpp>
 #include <tao/pegtl/contrib/trace.hpp>
 

@@ -1,7 +1,7 @@
 #pragma once
 
-#include "types.hpp"
+#include "arch/types.hpp"
 #include "util.hpp"
-#include "instruction.hpp"
-#include "encoding.hpp"
-#include "semantics.hpp"
+#include "arch/instruction.hpp"
+#include "arch/encoding.hpp"
+#include "arch/semantics.hpp"

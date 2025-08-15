@@ -2,8 +2,8 @@
 #include "assembler/disassembler.hpp"
 #include "assembler/assembler.hpp"
 #include "assembler/object.hpp"
-#include "instruction.hpp"
-#include "encoding.hpp"
+#include "arch/instruction.hpp"
+#include "arch/encoding.hpp"
 
 namespace asmr = irre::assembler;
 using irre::byte;
