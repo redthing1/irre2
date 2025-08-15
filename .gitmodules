@@ -7,3 +7,6 @@
 [submodule "src/third_party/catch2"]
 	path = src/third_party/catch2
 	url = https://github.com/catchorg/Catch2
+[submodule "src/third_party/pegtl"]
+	path = src/third_party/pegtl
+	url = https://github.com/taocpp/PEGTL

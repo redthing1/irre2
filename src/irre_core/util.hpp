@@ -5,6 +5,8 @@
 #include <cstdio>
 #include <string>
 #include <variant>
+#include <vector>
+#include <cstdint>
 
 namespace irre {
 
@@ -38,40 +40,44 @@ public:
   }
 };
 
-// instruction formatting
-inline std::string format_instruction(const instruction& inst) {
-  return std::visit(
-      [](const auto& i) -> std::string {
-        const auto mnemonic = get_mnemonic(i.op);
+// portable byte i/o utilities for endian-safe serialization
+namespace byte_io {
 
-        if constexpr (std::is_same_v<std::decay_t<decltype(i)>, inst_op>) {
-          return mnemonic;
-        } else if constexpr (std::is_same_v<std::decay_t<decltype(i)>, inst_op_reg>) {
-          return std::string(mnemonic) + " " + reg_name(i.a);
-        } else if constexpr (std::is_same_v<std::decay_t<decltype(i)>, inst_op_imm24>) {
-          char buf[32];
-          std::snprintf(buf, sizeof(buf), "%s 0x%06x", mnemonic, i.addr);
-          return buf;
-        } else if constexpr (std::is_same_v<std::decay_t<decltype(i)>, inst_op_reg_imm16>) {
-          char buf[32];
-          std::snprintf(buf, sizeof(buf), "%s %s 0x%04x", mnemonic, reg_name(i.a), i.imm);
-          return buf;
-        } else if constexpr (std::is_same_v<std::decay_t<decltype(i)>, inst_op_reg_reg>) {
-          return std::string(mnemonic) + " " + reg_name(i.a) + " " + reg_name(i.b);
-        } else if constexpr (std::is_same_v<std::decay_t<decltype(i)>, inst_op_reg_reg_imm8>) {
-          char buf[32];
-          std::snprintf(buf, sizeof(buf), "%s %s %s 0x%02x", mnemonic, reg_name(i.a), reg_name(i.b), i.offset);
-          return buf;
-        } else if constexpr (std::is_same_v<std::decay_t<decltype(i)>, inst_op_reg_imm8x2>) {
-          char buf[32];
-          std::snprintf(buf, sizeof(buf), "%s %s 0x%02x 0x%02x", mnemonic, reg_name(i.a), i.v0, i.v1);
-          return buf;
-        } else if constexpr (std::is_same_v<std::decay_t<decltype(i)>, inst_op_reg_reg_reg>) {
-          return std::string(mnemonic) + " " + reg_name(i.a) + " " + reg_name(i.b) + " " + reg_name(i.c);
-        }
-      },
-      inst
-  );
+// write little-endian values portably
+inline void write_u32_le(std::vector<byte>& buffer, uint32_t value) {
+  buffer.push_back(static_cast<byte>(value & 0xff)); // lsb
+  buffer.push_back(static_cast<byte>((value >> 8) & 0xff));
+  buffer.push_back(static_cast<byte>((value >> 16) & 0xff));
+  buffer.push_back(static_cast<byte>((value >> 24) & 0xff)); // msb
 }
+
+inline void write_u16_le(std::vector<byte>& buffer, uint16_t value) {
+  buffer.push_back(static_cast<byte>(value & 0xff));        // lsb
+  buffer.push_back(static_cast<byte>((value >> 8) & 0xff)); // msb
+}
+
+// read little-endian values portably
+inline uint32_t read_u32_le(const byte* data) {
+  return static_cast<uint32_t>(data[0]) | (static_cast<uint32_t>(data[1]) << 8) |
+         (static_cast<uint32_t>(data[2]) << 16) | (static_cast<uint32_t>(data[3]) << 24);
+}
+
+inline uint16_t read_u16_le(const byte* data) {
+  return static_cast<uint16_t>(data[0]) | (static_cast<uint16_t>(data[1]) << 8);
+}
+
+// magic number utilities
+inline void write_magic(std::vector<byte>& buffer) {
+  buffer.push_back('R'); // 0x52
+  buffer.push_back('G'); // 0x47
+  buffer.push_back('V'); // 0x56
+  buffer.push_back('M'); // 0x4d
+}
+
+inline bool check_magic(const byte* data) {
+  return data[0] == 'R' && data[1] == 'G' && data[2] == 'V' && data[3] == 'M';
+}
+
+} // namespace byte_io
 
 } // namespace irre
