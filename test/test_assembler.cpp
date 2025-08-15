@@ -643,3 +643,158 @@ TEST_CASE("portable byte i/o", "[util]") {
     REQUIRE_FALSE(irre::byte_io::check_magic(buffer.data()));
   }
 }
+
+TEST_CASE("sample program validation", "[assembler][samples]") {
+  asmr::assembler asm_engine;
+
+  SECTION("hex number parsing - should support $FF syntax") {
+    std::string source = R"(
+        %entry: start
+        
+        start:
+            set r0 $ff
+            set r1 $1234
+            set r2 $ffff
+            hlt
+    )";
+
+    auto result = asm_engine.assemble(source);
+    if (result.is_err()) {
+      auto error = result.error();
+      FAIL(
+          "Hex number parsing failed at line " + std::to_string(error.line) + ", column " +
+          std::to_string(error.column) + ": " + error.message
+      );
+    }
+    REQUIRE(result.is_ok());
+
+    auto obj = result.value();
+    REQUIRE(obj.code.size() == 16); // 4 instructions * 4 bytes
+  }
+
+  SECTION("simple arithmetic sample program") {
+    std::string source = R"(
+        ; simple.asm - Basic instruction test
+        %entry: start
+
+        start:
+            set r1 42
+            set r2 17
+            add r3 r1 r2
+            mov r4 r3
+            not r5 r4
+            
+            seq r7 r3 59
+            set r6 success
+            bve r6 r7 1
+            hlt
+
+        success:
+            set r8 255
+            set r9 240
+            hlt
+    )";
+
+    auto result = asm_engine.assemble(source);
+    if (result.is_err()) {
+      auto error = result.error();
+      FAIL(
+          "Simple sample failed at line " + std::to_string(error.line) + ", column " + std::to_string(error.column) +
+          ": " + error.message
+      );
+    }
+    REQUIRE(result.is_ok());
+
+    auto obj = result.value();
+    REQUIRE(obj.code.size() > 0);
+    REQUIRE(obj.code.size() % 4 == 0); // Must be multiple of 4 bytes
+    REQUIRE(obj.entry_offset == 0);    // Entry should be at start
+  }
+
+  SECTION("math operations sample with hex numbers") {
+    std::string source = R"(
+        ; Test hex number support
+        %entry: calculate
+        
+        calculate:
+            set r1 42
+            set r2 17
+            add r3 r1 r2
+            set r8 $FF
+            and r9 r1 r8
+            hlt
+    )";
+
+    auto result = asm_engine.assemble(source);
+    if (result.is_err()) {
+      auto error = result.error();
+      FAIL(
+          "Math sample with hex failed at line " + std::to_string(error.line) + ", column " +
+          std::to_string(error.column) + ": " + error.message +
+          "\nAssemble error type: " + std::string(asmr::assemble_error_message(error.error))
+      );
+    }
+    REQUIRE(result.is_ok());
+  }
+
+  SECTION("debug assembler error messages") {
+    // Test various syntax errors to ensure we get proper error messages
+
+    SECTION("invalid hex number") {
+      std::string source = "set r0 $XYZ";
+      auto result = asm_engine.assemble(source);
+      REQUIRE(result.is_err());
+      auto error = result.error();
+      // Should provide useful error message about invalid hex
+      INFO("Error message: " + error.message);
+      INFO("Error type: " + std::string(asmr::assemble_error_message(error.error)));
+      INFO("Line: " + std::to_string(error.line) + ", Column: " + std::to_string(error.column));
+    }
+
+    SECTION("malformed instruction") {
+      std::string source = "set r0"; // missing operand
+      auto result = asm_engine.assemble(source);
+      REQUIRE(result.is_err());
+      auto error = result.error();
+      INFO("Error message: " + error.message);
+      INFO("Error type: " + std::string(asmr::assemble_error_message(error.error)));
+      INFO("Line: " + std::to_string(error.line) + ", Column: " + std::to_string(error.column));
+    }
+  }
+
+  SECTION("data directive whitespace requirements") {
+    // Test 1: just %d with space
+    std::string source1 = "%d ";
+    auto result1 = asm_engine.assemble(source1);
+    if (result1.is_err()) {
+      auto error = result1.error();
+      FAIL(
+          "Test 1 failed at line " + std::to_string(error.line) + ", column " + std::to_string(error.column) + ": " +
+          error.message + " (error type: " + std::string(asmr::assemble_error_message(error.error)) + ")"
+      );
+    }
+    REQUIRE(result1.is_ok());
+
+    // Test 2: %d without space (should fail per grammar)
+    std::string source2 = "%d0 0 0";
+    auto result2 = asm_engine.assemble(source2);
+    REQUIRE(result2.is_err());
+
+    // Test 3: Multiple spaces/values like in math.asm
+    std::string source3 = "%d 0 0 0 0 0";
+    auto result3 = asm_engine.assemble(source3);
+    if (result3.is_err()) {
+      auto error = result3.error();
+      FAIL(
+          "Multiple values failed at line " + std::to_string(error.line) + ", column " + std::to_string(error.column) +
+          ": " + error.message
+      );
+    }
+    REQUIRE(result3.is_ok());
+
+    // Test 4: Empty %d
+    std::string source4 = "%d ";
+    auto result4 = asm_engine.assemble(source4);
+    REQUIRE(result4.is_ok());
+  }
+}

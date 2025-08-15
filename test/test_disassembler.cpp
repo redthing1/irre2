@@ -4,6 +4,7 @@
 #include "assembler/object.hpp"
 #include "arch/instruction.hpp"
 #include "arch/encoding.hpp"
+#include <iostream>
 
 namespace asmr = irre::assembler;
 using irre::byte;
@@ -368,5 +369,229 @@ TEST_CASE("disassembler convenience functions", "[disassembler]") {
     auto result = asmr::disasm::object(obj);
     REQUIRE(result.is_ok());
     REQUIRE(result.value().find("nop") != std::string::npos);
+  }
+}
+
+TEST_CASE("assembler/disassembler end-to-end tests", "[asmdisasm_e2e]") {
+  asmr::assembler asm_engine;
+  asmr::disassembler disasm;
+
+  SECTION("e2e: simple arithmetic program") {
+    std::string source = R"(
+        ; simple.asm - Basic instruction test
+        %entry: start
+
+        start:
+            set r1 42
+            set r2 17
+            add r3 r1 r2
+            mov r4 r3
+            not r5 r4
+            
+            seq r7 r3 59
+            set r6 success
+            bve r6 r7 1
+            hlt
+
+        success:
+            set r8 255
+            set r9 240
+            hlt
+    )";
+
+    // assemble to object file
+    auto asm_result = asm_engine.assemble(source);
+    REQUIRE(asm_result.is_ok());
+    auto obj = asm_result.value();
+
+    // verify object file structure
+    REQUIRE(obj.code.size() > 0);
+    REQUIRE(obj.code.size() % 4 == 0); // instructions are 4-byte aligned
+
+    // disassemble back
+    auto disasm_result = disasm.disassemble_object(obj, asmr::disasm_format::basic);
+    if (disasm_result.is_err()) {
+      FAIL("Disassembly failed: " + std::string(asmr::disasm_error_message(disasm_result.error())));
+    }
+    REQUIRE(disasm_result.is_ok());
+
+    std::string disassembly = disasm_result.value();
+
+    // verify all instructions are present and correct
+    REQUIRE(disassembly.find("set r1 0x002a") != std::string::npos); // 42 in hex
+    REQUIRE(disassembly.find("set r2 0x0011") != std::string::npos); // 17 in hex
+    REQUIRE(disassembly.find("add r3 r1 r2") != std::string::npos);
+    REQUIRE(disassembly.find("mov r4 r3") != std::string::npos);
+    REQUIRE(disassembly.find("not r5 r4") != std::string::npos);
+    REQUIRE(disassembly.find("seq r7 r3 0x3b") != std::string::npos); // 59 in hex
+    REQUIRE(disassembly.find("set r6 0x0024") != std::string::npos);  // success label address
+    REQUIRE(disassembly.find("bve r6 r7 0x01") != std::string::npos);
+    REQUIRE(disassembly.find("hlt") != std::string::npos);
+    REQUIRE(disassembly.find("set r8 0x00ff") != std::string::npos); // 255 in hex
+    REQUIRE(disassembly.find("set r9 0x00f0") != std::string::npos); // 240 in hex
+  }
+
+  SECTION("e2e: write and read object file to disk") {
+    std::string source = R"(
+        %entry: main
+        
+        main:
+            set r0 100
+            set r1 200
+            add r2 r0 r1
+            hlt
+    )";
+
+    // assemble
+    auto asm_result = asm_engine.assemble(source);
+    REQUIRE(asm_result.is_ok());
+    auto obj = asm_result.value();
+
+    // write to binary format
+    auto binary_data = obj.to_binary();
+    REQUIRE(binary_data.size() >= 24); // at least header size
+
+    // verify magic bytes (should be "RGVM")
+    REQUIRE(binary_data[0] == 'R');
+    REQUIRE(binary_data[1] == 'G');
+    REQUIRE(binary_data[2] == 'V');
+    REQUIRE(binary_data[3] == 'M');
+
+    // read back from binary
+    auto obj_result = asmr::object_file::from_binary(binary_data);
+    REQUIRE(obj_result.is_ok());
+    auto obj_loaded = obj_result.value();
+
+    // verify they match
+    REQUIRE(obj_loaded.entry_offset == obj.entry_offset);
+    REQUIRE(obj_loaded.code == obj.code);
+    REQUIRE(obj_loaded.data == obj.data);
+
+    // disassemble the loaded object
+    auto disasm_result = disasm.disassemble_object(obj_loaded);
+    REQUIRE(disasm_result.is_ok());
+
+    std::string disassembly = disasm_result.value();
+    REQUIRE(disassembly.find("set r0 0x0064") != std::string::npos); // 100 in hex
+    REQUIRE(disassembly.find("set r1 0x00c8") != std::string::npos); // 200 in hex
+    REQUIRE(disassembly.find("add r2 r0 r1") != std::string::npos);
+    REQUIRE(disassembly.find("hlt") != std::string::npos);
+  }
+
+  SECTION("e2e: complex control flow program") {
+    std::string source = R"(
+        %entry: main
+
+        main:
+            set r1 5
+            set r10 factorial
+            cal r10
+            set r3 result_area
+            stw r2 r3 0
+            hlt
+
+        factorial:
+            mov r20 lr
+            set r3 1
+            tcu r4 r1 r3
+            bif r4 base_case 2
+            
+            mov r21 r1
+            sbi r1 r1 1
+            set r10 factorial
+            cal r10
+            mul r2 r21 r2
+            jmi cleanup
+            
+        base_case:
+            set r2 1
+            
+        cleanup:
+            mov lr r20
+            ret
+
+        result_area:
+            %d 0
+    )";
+
+    // assemble
+    auto asm_result = asm_engine.assemble(source);
+    if (asm_result.is_err()) {
+      auto error = asm_result.error();
+      FAIL(
+          "Assembly failed: " + error.message + " at line " + std::to_string(error.line) + ", column " +
+          std::to_string(error.column)
+      );
+    }
+    REQUIRE(asm_result.is_ok());
+    auto obj = asm_result.value();
+
+    // disassemble
+    auto disasm_result = disasm.disassemble_object(obj);
+    REQUIRE(disasm_result.is_ok());
+
+    std::string disassembly = disasm_result.value();
+
+    // verify key control flow instructions
+    REQUIRE(disassembly.find("cal") != std::string::npos); // function call
+    REQUIRE(disassembly.find("bve") != std::string::npos); // conditional branch
+    REQUIRE(disassembly.find("jmi") != std::string::npos); // unconditional jump
+    REQUIRE(disassembly.find("ret") != std::string::npos); // return
+    REQUIRE(disassembly.find("stw") != std::string::npos); // store word
+    REQUIRE(disassembly.find("mul") != std::string::npos); // multiply
+    REQUIRE(disassembly.find("tcu") != std::string::npos); // unsigned compare
+  }
+
+  SECTION("e2e: test with actual file I/O like CLI tools") {
+    // this test mimics what the CLI tools do
+    std::string source = R"(
+        %entry: test_main
+        
+        test_main:
+            set r0 42
+            set r1 0
+            seq r2 r0 42
+            bif r2 end 1
+            set r1 1
+        end:
+            hlt
+    )";
+
+    // assemble
+    auto asm_result = asm_engine.assemble(source);
+    if (asm_result.is_err()) {
+      auto error = asm_result.error();
+      FAIL(
+          "Assembly failed: " + error.message + " at line " + std::to_string(error.line) + ", column " +
+          std::to_string(error.column)
+      );
+    }
+    REQUIRE(asm_result.is_ok());
+    auto obj = asm_result.value();
+
+    // convert to binary (what assembler CLI writes)
+    auto binary_data = obj.to_binary();
+
+    // simulate reading from file (what disassembler CLI reads)
+    auto obj_from_binary = asmr::object_file::from_binary(binary_data);
+    REQUIRE(obj_from_binary.is_ok());
+
+    // disassemble (what disassembler CLI does)
+    auto disasm_result = disasm.disassemble_object(obj_from_binary.value(), asmr::disasm_format::annotated);
+    REQUIRE(disasm_result.is_ok());
+
+    std::string output = disasm_result.value();
+
+    // verify annotated format includes headers
+    REQUIRE(output.find("irre object file disassembly") != std::string::npos);
+    REQUIRE(output.find("entry point:") != std::string::npos);
+    REQUIRE(output.find("code size:") != std::string::npos);
+
+    // verify instructions
+    REQUIRE(output.find("set r0 0x002a") != std::string::npos);
+    REQUIRE(output.find("set r1 0x0000") != std::string::npos);
+    REQUIRE(output.find("seq r2 r0 0x2a") != std::string::npos);
+    REQUIRE(output.find("bve ad r2") != std::string::npos); // from bif pseudo-instruction
+    REQUIRE(output.find("hlt") != std::string::npos);
   }
 }
