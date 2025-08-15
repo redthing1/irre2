@@ -15,7 +15,7 @@ int main(int argc, char* argv[]) {
 
   args::GlobalOptions globals(parser, arguments);
   args::Positional<std::string> input_file(parser, "input", "input assembly file (.asm)");
-  args::Positional<std::string> output_file(parser, "output", "output object file (.o, .obj)");
+  args::ValueFlag<std::string> output_file(parser, "output", "output object file (.o, .obj)", {'o', "output"});
 
   try {
     parser.ParseCLI(argc, argv);
@@ -28,8 +28,14 @@ int main(int argc, char* argv[]) {
     return 1;
   }
 
-  if (!input_file || !output_file) {
-    std::cerr << "error: both input and output files are required" << std::endl;
+  if (!input_file) {
+    std::cerr << "error: input file is required" << std::endl;
+    std::cerr << parser;
+    return 1;
+  }
+
+  if (!output_file) {
+    std::cerr << "error: output file is required (-o option)" << std::endl;
     std::cerr << parser;
     return 1;
   }

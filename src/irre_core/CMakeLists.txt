@@ -16,6 +16,11 @@ add_library(irre_core STATIC
   assembler/object.hpp
   assembler/disassembler.cpp
   assembler/disassembler.hpp
+  emu/memory.hpp
+  emu/state.hpp
+  emu/execution_visitor.hpp
+  emu/vm.hpp
+  emu/devices.hpp
 )
 
 # link with PEGTL for parsing

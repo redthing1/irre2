@@ -83,7 +83,8 @@ Labels can be referenced by name in instructions that accept addresses:
 ```assembly
 jmi main        ; Jump to label 'main'
 set lr return_point  ; Load address of 'return_point' into lr
-bif r0 loop_start 0  ; Branch to 'loop_start' if r0 == 0
+set ad loop_start    ; Load address of 'loop_start' into ad
+bve ad r0 0          ; Branch to 'loop_start' if r0 == 0
 ```
 
 ### Symbol Resolution
@@ -212,16 +213,6 @@ set at 10       ; Load immediate into temporary
 sub r0 r1 at    ; Perform subtraction
 ```
 
-### `bif` - Branch If
-Conditional branch based on comparison result:
-```assembly
-bif r0 target 1 ; Branch to 'target' if r0 == 1
-```
-Expands to:
-```assembly
-set ad target   ; Load target address into address temporary
-bve ad r0 1     ; Branch to ad if r0 == 1
-```
 
 ## Complete Program Example
 
@@ -238,7 +229,8 @@ main:
 fib_loop:
     ; Check if counter >= target
     tcu r4 r3 r2    ; r4 = sign(r3 - r2)
-    bif r4 done 1   ; if r4 == 1 (r3 >= r2), branch to done
+    set ad done     ; Load done address
+    bve ad r4 1     ; if r4 == 1 (r3 >= r2), branch to done
     
     ; Calculate next fibonacci number
     add r4 r0 r1    ; r4 = r0 + r1
@@ -296,7 +288,7 @@ Object files use the RGVM format with magic bytes "RGVM" and are compatible with
 
 ### Temporary Register Usage
 - `at` (assembler temporary 2): Used by `adi`, `sbi` pseudo-instructions
-- `ad` (assembler temporary 1): Used by `bif` pseudo-instruction
+- `ad` (assembler temporary 1): Used for address calculations
 - User code should avoid modifying these during pseudo-instruction usage
 
 ### Symbol Resolution Strategy

@@ -4,46 +4,44 @@
 %entry: main
 
 main:
-    ; Initialize counter
-    set r1 10             ; Loop counter
-    set r2 0              ; Accumulator
-    
-    ; Call factorial function
-    set r10 factorial
+    ; Test iterative factorial
+    set r1 5              ; Calculate factorial of 5
+    set r10 iterative_factorial
     cal r10
     
-    ; Store result
+    ; Store factorial result
     set r3 result
     stw r2 r3 0
     
+    ; Test counting loop
+    set r1 3              ; Count to 3
+    set r10 count_to_n
+    cal r10
+    
+    ; Store count result
+    set r3 result
+    stw r2 r3 4           ; Store at result+4
+    
+    ; Test simple loop with break condition
+    set r1 0              ; Start counter
+    set r4 10             ; End value
+    
+simple_loop:
+    ; Check if done
+    tcu r5 r1 r4          ; r5 = sign(r1 - r4)
+    set ad loop_done
+    bve ad r5 0           ; If r1 == r4, exit loop
+    
+    ; Do some work (square the counter)
+    mul r6 r1 r1          ; r6 = r1 * r1
+    
+    ; Increment counter
+    adi r1 r1 1
+    jmi simple_loop
+    
+loop_done:
     ; Exit
     hlt
-
-; Factorial function: calculates factorial of r1, result in r2
-factorial:
-    ; Save return address
-    mov r20 lr
-    
-    ; Base case: if r1 <= 1, return 1
-    set r3 1
-    tcu r4 r1 r3         ; Compare r1 with 1
-    bif r4 factorial_base 2  ; If r1 <= 1, go to base case
-    
-    ; Recursive case: r2 = r1 * factorial(r1-1)
-    mov r21 r1            ; Save current value
-    sub r1 r1 r3         ; r1 = r1 - 1
-    set r10 factorial
-    cal r10               ; Recursive call
-    mul r2 r21 r2         ; r2 = saved_value * factorial_result
-    jmi cleanup
-    
-factorial_base:
-    set r2 1              ; Base case result
-    
-cleanup:
-    ; Restore and return
-    mov lr r20
-    ret
 
 ; Alternative iterative factorial using loops
 iterative_factorial:
@@ -53,8 +51,9 @@ iterative_factorial:
     
 loop_start:
     ; Check if counter > input
-    tcu r4 r3 r1
-    bif r4 loop_end 1     ; If counter > input, exit loop
+    tcu r4 r3 r1          ; r4 = sign(r3 - r1)
+    set ad loop_end
+    bve ad r4 1           ; If r4 == 1 (counter > input), exit loop
     
     ; Multiply result by counter
     mul r2 r2 r3
@@ -74,8 +73,9 @@ count_to_n:
     
 count_loop:
     ; Check if we've reached n
-    tcu r3 r2 r1
-    bif r3 count_done 0   ; If counter == n, we're done
+    tcu r3 r2 r1          ; r3 = sign(r2 - r1)
+    set ad count_done
+    bve ad r3 0           ; If r3 == 0 (counter == n), we're done
     
     ; Increment counter
     adi r2 r2 1

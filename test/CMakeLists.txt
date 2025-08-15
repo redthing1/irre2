@@ -16,6 +16,7 @@ add_executable(irre-test
     test_assembler.cpp
     test_disassembler.cpp
     test_end_to_end.cpp
+    test_emu.cpp
 )
 
 # link against irre_core and Catch2

@@ -247,7 +247,8 @@ TEST_CASE("comprehensive assembly programs", "[assembler][programs]") {
             fib_loop:
                 ; check if counter >= target
                 tcu r4 r3 r2  ; r4 = sign of (r3 - r2)
-                bif r4 done 1 ; if r4 == 1 (r3 >= r2), branch to done
+                set ad done
+                bve ad r4 1 ; if r4 == 1 (r3 >= r2), branch to done
                 
                 ; calculate next fibonacci number
                 add r4 r0 r1  ; r4 = r0 + r1
@@ -289,23 +290,26 @@ TEST_CASE("comprehensive assembly programs", "[assembler][programs]") {
                 hlt           ; result is in r0
                 
             factorial:
-                ; calculate factorial recursively
+                ; calculate factorial iteratively
                 ; input: r0 = n, output: r0 = n!
-                set r1 1      ; base case check
-                tcu r2 r1 r0  ; r2 = sign(1 - r0)
-                bif r2 factorial_base 1  ; if 1-r0 >= 0 (r0 <= 1), go to base case
+                set r1 1      ; result accumulator
+                set r2 1      ; counter
                 
-                ; recursive case: n! = n * (n-1)!
-                mov r1 r0     ; save n
-                sbi r0 r0 1   ; r0 = n-1 (using pseudo-instruction)
-                set lr factorial_return  ; set return address
-                jmi factorial ; recursive call
-            factorial_return:
-                mul r0 r0 r1  ; r0 = (n-1)! * n
-                jmp lr        ; return
+            factorial_loop:
+                ; check if counter > n
+                tcu r3 r2 r0  ; r3 = sign(r2 - r0)
+                set ad factorial_done
+                bve ad r3 1   ; if r2 > r0, we're done
                 
-            factorial_base:
-                set r0 1      ; return 1
+                ; multiply result by counter
+                mul r1 r1 r2
+                
+                ; increment counter  
+                adi r2 r2 1
+                jmi factorial_loop
+                
+            factorial_done:
+                mov r0 r1     ; return result in r0
                 jmp lr        ; return
         )";
 
@@ -446,14 +450,16 @@ TEST_CASE("comprehensive assembly programs", "[assembler][programs]") {
                 ; test all pseudo-instructions
                 adi r0 r1 42    ; should expand to: set at 42; add r0 r1 at
                 sbi r2 r3 15    ; should expand to: set at 15; sub r2 r3 at
-                bif r4 loop 1   ; should expand to: set ad loop; bve ad r4 1
+                set ad loop
+                bve ad r4 1   ; expanded manually from bif r4 loop 1
                 
                 set r0 100
                 
             loop:
                 ; more pseudo-instruction usage
                 sbi r0 r0 1     ; decrement
-                bif r0 done 0   ; branch if zero
+                set ad done
+                bve ad r0 0   ; branch if zero
                 jmi loop
                 
             done:
@@ -499,7 +505,8 @@ TEST_CASE("comprehensive assembly programs", "[assembler][programs]") {
             main_loop:
                 set r2 10     ; load 10 into r2
                 tcu r1 r0 r2  ; compare r0 with 10 (r1 = sign of r0-r2)
-                bif r1 end 1  ; if r1 == 1 (r0 >= 10), branch to end
+                set ad end
+                bve ad r1 1  ; if r1 == 1 (r0 >= 10), branch to end
                 
                 jmi process    ; backward reference
                 
@@ -551,7 +558,8 @@ TEST_CASE("comprehensive assembly programs", "[assembler][programs]") {
                 adi r0 r0 1        ; increment
                 set r2 #200        ; compare value
                 tcu r3 r0 r2       ; r3 = sign(r0 - 200)
-                bif r3 exit_point 1 ; if r0 >= 200, exit
+                set ad exit_point
+                bve ad r3 1 ; if r0 >= 200, exit
                 jmi loop_test1     ; backward reference - loop again
                 
             subroutine_b:

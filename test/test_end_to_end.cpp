@@ -117,21 +117,23 @@ TEST_CASE("End-to-end assembler/disassembler tests", "[e2e]") {
 
             factorial:
                 mov r20 lr
-                set r3 1
-                tcu r4 r1 r3
-                bif r4 base_case 2
+                set r2 1              ; result accumulator
+                set r3 1              ; counter
                 
-                mov r21 r1
-                sbi r1 r1 1
-                set r10 factorial
-                cal r10
-                mul r2 r21 r2
-                jmi cleanup
+            factorial_loop:
+                ; check if counter > input
+                tcu r4 r3 r1          ; r4 = sign(r3 - r1)
+                set ad factorial_done
+                bve ad r4 1           ; if r3 > r1, exit loop
                 
-            base_case:
-                set r2 1
+                ; multiply result by counter
+                mul r2 r2 r3
                 
-            cleanup:
+                ; increment counter
+                adi r3 r3 1
+                jmi factorial_loop
+                
+            factorial_done:
                 mov lr r20
                 ret
 
@@ -151,13 +153,13 @@ TEST_CASE("End-to-end assembler/disassembler tests", "[e2e]") {
     // Verify control flow instructions
     REQUIRE(disassembly.find("cal") != std::string::npos);
     REQUIRE(disassembly.find("ret") != std::string::npos);
-    REQUIRE(disassembly.find("mul r2 r21 r2") != std::string::npos);
+    REQUIRE(disassembly.find("mul r2 r2 r3") != std::string::npos); // iterative multiplication
 
     // Verify pseudo-instructions were expanded
-    REQUIRE(disassembly.find("set at") != std::string::npos);       // from sbi
-    REQUIRE(disassembly.find("sub r1 r1 at") != std::string::npos); // from sbi
-    REQUIRE(disassembly.find("set ad") != std::string::npos);       // from bif
-    REQUIRE(disassembly.find("bve ad r4") != std::string::npos);    // from bif
+    REQUIRE(disassembly.find("set at") != std::string::npos);       // from adi
+    REQUIRE(disassembly.find("add r3 r3 at") != std::string::npos); // from adi
+    REQUIRE(disassembly.find("set ad") != std::string::npos);       // from branch setup
+    REQUIRE(disassembly.find("bve ad r4") != std::string::npos);    // from loop condition
   }
 
   SECTION("binary format round-trip") {
@@ -168,7 +170,8 @@ TEST_CASE("End-to-end assembler/disassembler tests", "[e2e]") {
                 set r0 42
                 set r1 0
                 seq r2 r0 42
-                bif r2 end 1
+                set ad end
+                bve ad r2 1
                 set r1 1
             end:
                 hlt

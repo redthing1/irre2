@@ -301,9 +301,7 @@ result<uint32_t, std::string> parse_immediate(const std::string& imm_str) {
 
 bool is_immediate(const std::string& str) { return str[0] == '#' || str[0] == '$' || std::isdigit(str[0]); }
 
-bool is_pseudo_instruction(const std::string& mnemonic) {
-  return mnemonic == "adi" || mnemonic == "sbi" || mnemonic == "bif";
-}
+bool is_pseudo_instruction(const std::string& mnemonic) { return mnemonic == "adi" || mnemonic == "sbi"; }
 
 validation_result validate_immediate_range(uint32_t value, size_t bits) {
   uint32_t max_value = (1u << bits) - 1;
@@ -505,12 +503,6 @@ std::vector<std::vector<std::string>> expand_pseudo_instruction(
     if (operands.size() == 3) {
       result.push_back({"set", "at", operands[2]});
       result.push_back({"sub", operands[0], operands[1], "at"});
-    }
-  } else if (mnemonic == "bif") {
-    // bif cond target #val -> conditional branch based on comparison result
-    if (operands.size() == 3) {
-      result.push_back({"set", "ad", operands[1]});              // set ad to target address
-      result.push_back({"bve", "ad", operands[0], operands[2]}); // branch to ad if cond equals val
     }
   }
 

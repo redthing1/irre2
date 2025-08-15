@@ -16,8 +16,7 @@ main:
     snd r1 r2 r3         ; device_send(string_addr, device, length)
     
     ; Exit program
-    set r1 0              ; exit code
-    int 0                  ; system exit
+    hlt                   ; halt execution
 
 ; String data
 hello_str:
