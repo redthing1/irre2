@@ -9,4 +9,4 @@
 	url = https://github.com/catchorg/Catch2
 [submodule "src/third_party/pegtl"]
 	path = src/third_party/pegtl
-	url = https://github.com/taocpp/PEGTL
+	url = https://github.com/redthing1/pegtl
