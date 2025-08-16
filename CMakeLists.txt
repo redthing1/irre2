@@ -34,6 +34,7 @@ if(CLANG_FORMAT_EXE)
          ${CMAKE_SOURCE_DIR}/src/irre_*/*.cpp
          ${CMAKE_SOURCE_DIR}/src/irre_*/*.hpp
          ${CMAKE_SOURCE_DIR}/src/irre_*/*.h
+         ${CMAKE_SOURCE_DIR}/src/irre_*/*.c
          ${CMAKE_SOURCE_DIR}/test/*.cpp
          ${CMAKE_SOURCE_DIR}/test/*.hpp
          ${CMAKE_SOURCE_DIR}/test/*.h)
