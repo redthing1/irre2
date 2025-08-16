@@ -165,16 +165,9 @@ std::string disassembler::format_address(uint32_t addr) const {
 std::string disassembler::format_hex_bytes(const std::vector<byte>& bytes) const {
   std::ostringstream ss;
 
-  // show as little-endian 32-bit word (bytes are already in little-endian order)
-  if (bytes.size() == 4) {
-    uint32_t word = static_cast<uint32_t>(bytes[0]) | (static_cast<uint32_t>(bytes[1]) << 8) |
-                    (static_cast<uint32_t>(bytes[2]) << 16) | (static_cast<uint32_t>(bytes[3]) << 24);
-    ss << std::hex << std::setfill('0') << std::setw(8) << word;
-  } else {
-    // fallback for non-4-byte sequences
-    for (size_t i = 0; i < bytes.size(); ++i) {
-      ss << std::hex << std::setfill('0') << std::setw(2) << static_cast<int>(bytes[i]);
-    }
+  // show bytes in the exact order they appear in the file (little-endian)
+  for (size_t i = 0; i < bytes.size(); ++i) {
+    ss << std::hex << std::setfill('0') << std::setw(2) << static_cast<int>(bytes[i]);
   }
 
   return ss.str();
