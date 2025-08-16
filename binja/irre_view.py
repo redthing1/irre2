@@ -27,7 +27,7 @@ class IRREBinaryView(BinaryView):
     """Binary view for IRRE object files"""
 
     name = "IRRE"
-    long_name = "IRRE Object File"
+    long_name = "IRRE Object"
 
     def __init__(self, data):
         BinaryView.__init__(self, parent_view=data, file_metadata=data.file)
