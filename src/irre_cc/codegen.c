@@ -175,6 +175,8 @@ static void gen_for_stmt(Node *node);
 static void gen_do_while_stmt(Node *node);
 static void gen_address_of(Node *node);
 static void gen_dereference(Node *node);
+static void gen_member_access(Node *node);
+static void gen_stmt_expr(Node *node);
 static void gen_function_call(Node *node);
 
 /* ================================================================
@@ -209,6 +211,19 @@ static void emit_label(const char *label) {
     emit("%s:", label);
 }
 
+// Sanitize label names for IRRE assembler (replace dots with underscores)
+static char *sanitize_label(const char *label) {
+    if (!label) return NULL;
+    
+    char *result = strdup(label);
+    for (char *p = result; *p; p++) {
+        if (*p == '.') {
+            *p = '_';
+        }
+    }
+    return result;
+}
+
 static int new_label(void) {
     return label_counter++;
 }
@@ -239,7 +254,9 @@ static void emit_load_const(int reg, uint32_t value) {
 
 // Load a label address into register
 static void emit_load_label(int reg, const char *label) {
-    emit("    set r%d %s         ; r%d = address of %s", reg, label, reg, label);
+    char *clean_label = sanitize_label(label);
+    emit("    set r%d %s         ; r%d = address of %s", reg, clean_label, reg, label);
+    free(clean_label);
 }
 
 // Convert register number to IRRE register name
@@ -392,7 +409,7 @@ static void emit_sign_extend_byte(int dst, int src) {
     emit_comment("Sign extend byte: r%d = sign_extend(r%d)", dst, src);
     emit_load_const(REG_R28, 24);                  // Shift amount
     emit("    lsh r%d r%d r28     ; shift left 24 bits", dst, src);
-    emit("    sub r28 r0 r28      ; r28 = -24");
+    emit_load_const(REG_R28, -24);                 // Negative shift amount  
     emit("    ash r%d r%d r28     ; arithmetic shift right 24 bits", dst, dst);
 }
 
@@ -408,7 +425,7 @@ static void emit_sign_extend_short(int dst, int src) {
     emit_comment("Sign extend short: r%d = sign_extend(r%d)", dst, src);
     emit_load_const(REG_R28, 16);                  // Shift amount
     emit("    lsh r%d r%d r28     ; shift left 16 bits", dst, src);
-    emit("    sub r28 r0 r28      ; r28 = -16"); 
+    emit_load_const(REG_R28, -16);                 // Negative shift amount
     emit("    ash r%d r%d r28     ; arithmetic shift right 16 bits", dst, dst);
 }
 
@@ -660,6 +677,21 @@ static void gen_number(Node *node) {
 static void gen_variable(Node *node) {
     Obj *var = node->var;
     
+    // For array types, return the address (arrays decay to pointers)
+    if (var->ty->kind == TY_ARRAY) {
+        if (var->is_local) {
+            // Local array - compute address on stack frame
+            emit_comment("Load address of local array %s (offset %d)", var->name, var->offset);
+            emit_load_const(REG_R0, var->offset);
+            emit("    add r0 r30 r0         ; r0 = fp + offset");
+        } else {
+            // Global array - load address
+            emit_comment("Load address of global array %s", var->name);
+            emit_load_label(REG_R0, var->name);
+        }
+        return;
+    }
+    
     if (var->is_local) {
         // Local variable - load from stack frame
         emit_comment("Load local variable %s (offset %d)", var->name, var->offset);
@@ -709,6 +741,42 @@ static void gen_dereference(Node *node) {
     emit_load_word(REG_R0, REG_R0, 0);                 // r0 = *(r0 + 0)
 }
 
+// Generate code for struct member access
+static void gen_member_access(Node *node) {
+    emit_comment("Struct member access");
+    
+    // Generate address of the struct
+    gen_expr(node->lhs);                               // Get struct address in r0
+    
+    // Add member offset to get member address
+    Member *member = node->member;
+    if (member && member->offset > 0) {
+        emit_comment("Add member offset %d", member->offset);
+        emit_load_const(REG_R28, member->offset);
+        emit("    add r0 r0 r28        ; r0 = struct_addr + member_offset");
+    }
+    
+    // Load the member value (for most cases - addresses handled by ND_ADDR)
+    if (node->ty->kind != TY_ARRAY) {
+        emit_comment("Load member value");
+        emit_load_word(REG_R0, REG_R0, 0);             // Load value from member address
+    }
+    // For arrays, return the address (arrays decay to pointers)
+}
+
+// Generate code for statement expressions
+static void gen_stmt_expr(Node *node) {
+    emit_comment("Statement expression");
+    
+    // Execute all statements in the block
+    for (Node *stmt = node->body; stmt; stmt = stmt->next) {
+        gen_stmt(stmt);
+    }
+    
+    // The last statement should leave its result in r0
+    // No additional work needed - the final expression result is already in r0
+}
+
 // Generate code for function calls
 static void gen_function_call(Node *node) {
     // Count arguments
@@ -746,14 +814,22 @@ static void gen_function_call(Node *node) {
     
     free(args);
     
-    // Call the function (lhs should contain the function variable)
-    char *func_name = (node->lhs && node->lhs->var) ? node->lhs->var->name : "unknown";
-    emit_comment("Call function %s", func_name);
-    emit_load_label(REG_R29, func_name);               // r29 = function address
-    emit("    cal r29             ; lr = pc + 4; pc = %s", func_name);
-    
-    // Return value is already in r0
-    emit_comment("Function %s returned (result in r0)", func_name);
+    // Call the function - handle both direct calls and function pointers
+    if (node->lhs && node->lhs->kind == ND_VAR && node->lhs->var && node->lhs->var->is_function) {
+        // Direct function call
+        char *func_name = node->lhs->var->name;
+        emit_comment("Direct call to function %s", func_name);
+        emit_load_label(REG_R29, func_name);           // r29 = function address
+        emit("    cal r29             ; lr = pc + 4; pc = %s", func_name);
+        emit_comment("Function %s returned (result in r0)", func_name);
+    } else {
+        // Function pointer call - evaluate expression to get function address
+        emit_comment("Function pointer call");
+        gen_expr(node->lhs);                           // Function address in r0
+        emit("    mov r29 r0          ; r29 = function address from pointer");
+        emit("    cal r29             ; lr = pc + 4; pc = function_address");
+        emit_comment("Function pointer returned (result in r0)");
+    }
 }
 
 // Generate code for binary arithmetic operations
@@ -882,24 +958,63 @@ static void gen_unary(Node *node) {
 
 // Generate code for assignments
 static void gen_assignment(Node *node) {
-    if (node->lhs->kind != ND_VAR) {
-        error_tok(node->tok, "invalid assignment target");
-    }
-    
-    Obj *var = node->lhs->var;
-    
-    // Generate the value to assign
+    // Generate the value to assign first
     gen_expr(node->rhs);                               // result in r0
+    emit_push(REG_R0);                                 // save value on stack
     
-    if (var->is_local) {
-        // Store to local variable
-        emit_comment("Assign to local variable %s", var->name);
-        emit_store_word(REG_R0, REG_R30, var->offset);
+    // Handle different assignment target types
+    if (node->lhs->kind == ND_VAR) {
+        // Direct variable assignment
+        Obj *var = node->lhs->var;
+        
+        emit_pop(REG_R0);                              // restore value
+        
+        if (var->is_local) {
+            // Store to local variable
+            emit_comment("Assign to local variable %s", var->name);
+            emit_store_word(REG_R0, REG_R30, var->offset);
+        } else {
+            // Store to global variable
+            emit_comment("Assign to global variable %s", var->name);
+            emit_load_label(REG_R8, var->name);        // load address into temp
+            emit_store_word(REG_R0, REG_R8, 0);        // store value
+        }
+        
+    } else if (node->lhs->kind == ND_DEREF) {
+        // Pointer dereference assignment: *ptr = value
+        emit_comment("Assign to pointer dereference");
+        
+        // Generate address to store to
+        gen_expr(node->lhs->lhs);                      // address in r0
+        emit("    mov r8 r0               ; r8 = address");
+        
+        // Restore value and store
+        emit_pop(REG_R0);                              // restore value
+        emit_store_word(REG_R0, REG_R8, 0);           // store value to *address
+        
+    } else if (node->lhs->kind == ND_MEMBER) {
+        // Struct member assignment: struct.member = value
+        emit_comment("Assign to struct member");
+        
+        // Generate address of the struct
+        gen_expr(node->lhs->lhs);                      // Get struct address in r0
+        
+        // Add member offset to get member address
+        Member *member = node->lhs->member;
+        if (member && member->offset > 0) {
+            emit_comment("Add member offset %d", member->offset);
+            emit_load_const(REG_R28, member->offset);
+            emit("    add r0 r0 r28        ; r0 = struct_addr + member_offset");
+        }
+        
+        emit("    mov r8 r0               ; r8 = member address");
+        
+        // Restore value and store
+        emit_pop(REG_R0);                              // restore value
+        emit_store_word(REG_R0, REG_R8, 0);           // store value to member
+        
     } else {
-        // Store to global variable
-        emit_comment("Assign to global variable %s", var->name);
-        emit_load_label(REG_R8, var->name);            // load address into temp
-        emit_store_word(REG_R0, REG_R8, 0);            // store value
+        error_tok(node->tok, "invalid assignment target");
     }
     
     // Assignment expressions return the assigned value (already in r0)
@@ -1047,6 +1162,10 @@ static void gen_expr(Node *node) {
             gen_dereference(node);
             break;
             
+        case ND_MEMBER:
+            gen_member_access(node);
+            break;
+            
         case ND_FUNCALL:
             gen_function_call(node);
             break;
@@ -1112,6 +1231,44 @@ static void gen_expr(Node *node) {
             emit_comment("Comma operator: evaluate right expression");
             gen_expr(node->rhs);                           // Generate right expression (result)
             break;
+            
+        case ND_STMT_EXPR:
+            // Statement expression: ({ statements; final_expression; })
+            gen_stmt_expr(node);
+            break;
+            
+        case ND_MEMZERO: {
+            // Zero-initialize a stack variable
+            emit_comment("Zero-initialize variable");
+            int size = node->var->ty->size;
+            
+            // For small variables, just store zero directly
+            if (size <= 4) {
+                emit_load_const(REG_R0, 0);
+                if (node->var->is_local) {
+                    emit("    stw r0 r30 #%d      ; store word to r30 + %d", 
+                         node->var->offset, node->var->offset);
+                } else {
+                    // Global variable
+                    emit("    set r31 %s", node->var->name);
+                    emit("    stw r0 r31 #0       ; store to global %s", node->var->name);
+                }
+            } else {
+                // For larger variables, zero byte by byte
+                emit_load_const(REG_R0, 0);                    // r0 = 0 (value to store)
+                for (int i = 0; i < size; i++) {
+                    if (node->var->is_local) {
+                        emit("    stb r0 r30 #%d      ; zero byte at offset %d", 
+                             node->var->offset + i, node->var->offset + i);
+                    } else {
+                        emit("    set r31 %s", node->var->name);
+                        emit("    stb r0 r31 #%d      ; zero byte %d of global %s", 
+                             i, i, node->var->name);
+                    }
+                }
+            }
+            break;
+        }
             
         default:
             error_tok(node->tok, "unsupported expression type: %s", 
@@ -1188,8 +1345,22 @@ static void gen_if_stmt(Node *node) {
 static void gen_for_stmt(Node *node) {
     int id = label_counter++;
     char *begin_label = format("_L_for_begin_%d", id);
-    char *end_label = format("_L_for_end_%d", id);
-    char *continue_label = format("_L_for_continue_%d", id);
+    
+    // Use parser-provided labels if available, otherwise generate our own
+    char *end_label;
+    char *continue_label;
+    
+    if (node->brk_label) {
+        end_label = sanitize_label(node->brk_label);
+    } else {
+        end_label = format("_L_for_end_%d", id);
+    }
+    
+    if (node->cont_label) {
+        continue_label = sanitize_label(node->cont_label);
+    } else {
+        continue_label = format("_L_for_continue_%d", id);
+    }
     
     emit_comment("For/While loop");
     
@@ -1231,14 +1402,32 @@ static void gen_for_stmt(Node *node) {
     // End label - break statements and failed conditions jump here
     emit_label(end_label);
     emit_comment("End of for/while loop");
+    
+    // Cleanup allocated labels
+    if (node->brk_label) free(end_label);
+    if (node->cont_label) free(continue_label);
 }
 
 // Generate do-while statement  
 static void gen_do_while_stmt(Node *node) {
     int id = label_counter++;
     char *begin_label = format("_L_do_begin_%d", id);
-    char *end_label = format("_L_do_end_%d", id);
-    char *continue_label = format("_L_do_continue_%d", id);
+    
+    // Use parser-provided labels if available, otherwise generate our own
+    char *end_label;
+    char *continue_label;
+    
+    if (node->brk_label) {
+        end_label = sanitize_label(node->brk_label);
+    } else {
+        end_label = format("_L_do_end_%d", id);
+    }
+    
+    if (node->cont_label) {
+        continue_label = sanitize_label(node->cont_label);
+    } else {
+        continue_label = format("_L_do_continue_%d", id);
+    }
     
     emit_comment("Do-while loop");
     
@@ -1263,6 +1452,120 @@ static void gen_do_while_stmt(Node *node) {
     // End label - break statements jump here
     emit_label(end_label);
     emit_comment("End of do-while loop");
+    
+    // Cleanup allocated labels
+    if (node->brk_label) free(end_label);
+    if (node->cont_label) free(continue_label);
+}
+
+// Generate goto statement
+static void gen_goto_stmt(Node *node) {
+    emit_comment("Goto statement");
+    char *label = NULL;
+    
+    if (node->unique_label) {
+        label = sanitize_label(node->unique_label);
+    } else if (node->label) {
+        label = sanitize_label(node->label);
+    }
+    
+    if (label) {
+        emit("    jmi %s", label);
+        free(label);
+    } else {
+        error_tok(node->tok, "goto statement without label");
+    }
+}
+
+// Generate label statement
+static void gen_label_stmt(Node *node) {
+    emit_comment("Label statement");
+    char *label = NULL;
+    
+    if (node->unique_label) {
+        label = sanitize_label(node->unique_label);
+    } else if (node->label) {
+        label = sanitize_label(node->label);
+    }
+    
+    if (label) {
+        emit_label(label);
+        free(label);
+    }
+    
+    // Generate the statement after the label
+    if (node->lhs) {
+        gen_stmt(node->lhs);
+    }
+}
+
+// Generate switch statement
+static void gen_switch_stmt(Node *node) {
+    emit_comment("Switch statement");
+    
+    // Evaluate switch expression once and save in r16 (saved register, won't conflict)
+    gen_expr(node->cond);                               // Switch value in r0
+    emit("    mov r16 r0          ; save switch value in r16");
+    
+    // Generate comparisons for each case
+    for (Node *case_node = node->case_next; case_node; case_node = case_node->case_next) {
+        emit_comment("Compare with case %ld", case_node->val);
+        
+        // Load case value into r28
+        emit_load_const(REG_R28, (uint32_t)case_node->val);
+        
+        // Compare switch value (r16) with case value (r28) -> result in r29  
+        emit("    tcu r29 r16 r28   ; r29 = sign(r16 - r28), 0 if equal");
+        
+        // Load case label address into r31 (compiler temp)
+        char *case_label = sanitize_label(case_node->label);
+        emit("    set r31 %s       ; r31 = address of %s", case_label, case_label);
+        
+        // Branch if equal (r29 == 0)
+        emit("    bve r31 r29 #0   ; if (r29 == 0) goto %s", case_label);
+        free(case_label);
+    }
+    
+    // Jump to default case if provided
+    if (node->default_case) {
+        char *default_label = sanitize_label(node->default_case->label);
+        emit("    jmi %s           ; goto default case", default_label);
+        free(default_label);
+    }
+    
+    // Jump to break label (end of switch)
+    if (node->brk_label) {
+        char *break_label = sanitize_label(node->brk_label);
+        emit("    jmi %s           ; goto end of switch", break_label);
+        free(break_label);
+    }
+    
+    // Generate switch body
+    gen_stmt(node->then);
+    
+    // Generate break label
+    if (node->brk_label) {
+        char *break_label = sanitize_label(node->brk_label);
+        emit_label(break_label);
+        free(break_label);
+    }
+}
+
+// Generate case statement  
+static void gen_case_stmt(Node *node) {
+    emit_comment("Case statement");
+    
+    // Generate case label
+    if (node->label) {
+        char *case_label = sanitize_label(node->label);
+        emit_label(case_label);
+        free(case_label);
+    }
+    
+    // Generate the statement after the case
+    if (node->lhs) {
+        gen_stmt(node->lhs);
+    }
 }
 
 // Main statement generator
@@ -1298,6 +1601,22 @@ static void gen_stmt(Node *node) {
             
         case ND_DO:
             gen_do_while_stmt(node);
+            break;
+            
+        case ND_GOTO:
+            gen_goto_stmt(node);
+            break;
+            
+        case ND_LABEL:
+            gen_label_stmt(node);
+            break;
+            
+        case ND_SWITCH:
+            gen_switch_stmt(node);
+            break;
+            
+        case ND_CASE:
+            gen_case_stmt(node);
             break;
             
         default:
@@ -1522,24 +1841,40 @@ static void gen_globals(Obj *prog) {
     emit("%%section data");
     emit("");
     
-    // Generate each global variable (skip string literals which start with .L..)
+    // Generate each global variable and string literal
     for (Obj *var = prog; var; var = var->next) {
         if (!var->is_function && !var->is_local) {
-            // Skip string literals (generated automatically by string processing)
+            char *clean_name = var->name;
+            
+            // Handle string literals with .L.. names
             if (var->name && strncmp(var->name, ".L..", 4) == 0) {
-                continue;
-            }
-            
-            emit_comment("Global variable: %s (%d bytes)", var->name, var->ty->size);
-            emit_label(var->name);
-            
-            if (var->init_data) {
-                // TODO: Handle initialized global variables properly
-                emit_comment("Initialized data not yet implemented");
-                emit("    %%d 0               ; placeholder for initialized data");
+                emit_comment("String literal: %s", var->name);
+                clean_name = sanitize_label(var->name);
+                emit_label(clean_name);
+                
+                if (var->init_data) {
+                    // String literal data
+                    emit("    %%d \"%s\"", var->init_data);
+                } else {
+                    emit("    %%d \"\"            ; empty string");
+                }
+                
+                if (clean_name != var->name) {
+                    free(clean_name);
+                }
             } else {
-                // Zero-initialized global variable
-                emit("    %%d 0               ; %d-byte global variable", var->ty->size);
+                // Regular global variable
+                emit_comment("Global variable: %s (%d bytes)", var->name, var->ty->size);
+                emit_label(var->name);
+                
+                if (var->init_data) {
+                    // TODO: Handle initialized global variables properly
+                    emit_comment("Initialized data not yet implemented");
+                    emit("    %%d 0               ; placeholder for initialized data");
+                } else {
+                    // Zero-initialized global variable
+                    emit("    %%d 0               ; %d-byte global variable", var->ty->size);
+                }
             }
             emit("");
         }

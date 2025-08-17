@@ -219,7 +219,7 @@ static void cc1(void) {
 
 static void assemble(char *input, char *output) {
   char *cmd[] = {
-    "riscv64-unknown-linux-gnu-as", "-c", input, "-o", output, NULL
+    "./build-macos/bin/irre-asm", input, "-o", output, NULL
   };
   run_subprocess(cmd);
 }
