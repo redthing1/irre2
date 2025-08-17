@@ -2,6 +2,7 @@
 #include <iomanip>
 #include <fstream>
 #include <algorithm>
+#include <optional>
 
 namespace irre::assembler {
 
@@ -10,43 +11,84 @@ result<std::string, disasm_error> disassembler::disassemble_object(const object_
     return std::string(""); // empty object file
   }
 
-  // decode instruction sequence from code section
-  auto instructions_result = byte_utils::decode_sequence(obj.code);
-  if (instructions_result.is_err()) {
-    return disasm_error::decode_failed;
+  // decode instruction sequence from code section, handling errors gracefully
+  struct disasm_entry {
+    std::optional<instruction> inst;
+    std::string error_msg;
+    bool is_error = false;
+  };
+  
+  std::vector<disasm_entry> entries;
+  
+  if (obj.code.size() % 4 != 0) {
+    return disasm_error::invalid_size;
   }
 
-  auto instructions = instructions_result.value();
+  entries.reserve(obj.code.size() / 4);
+  for (size_t i = 0; i < obj.code.size(); i += 4) {
+    auto inst_result = codec::decode_bytes(&obj.code[i]);
+    if (inst_result.is_ok()) {
+      entries.push_back({inst_result.value(), "", false});
+    } else {
+      // Create an error entry for invalid instructions
+      word invalid_word = static_cast<word>(obj.code[i]) | 
+                         (static_cast<word>(obj.code[i+1]) << 8) |
+                         (static_cast<word>(obj.code[i+2]) << 16) |
+                         (static_cast<word>(obj.code[i+3]) << 24);
+      
+      std::ostringstream error_msg;
+      error_msg << "; ERROR: " << decode_error_message(inst_result.error()) 
+                << " (0x" << std::hex << std::setfill('0') << std::setw(8) << invalid_word
+                << " = " << std::hex << std::setfill('0') << std::setw(2) 
+                << static_cast<int>(obj.code[i]) << " "
+                << std::hex << std::setfill('0') << std::setw(2) 
+                << static_cast<int>(obj.code[i+1]) << " "
+                << std::hex << std::setfill('0') << std::setw(2) 
+                << static_cast<int>(obj.code[i+2]) << " "
+                << std::hex << std::setfill('0') << std::setw(2) 
+                << static_cast<int>(obj.code[i+3]) << ")";
+      
+      entries.push_back({std::nullopt, error_msg.str(), true});
+    }
+  }
+
   std::ostringstream output;
 
   // add header comment for object file info
   if (fmt == disasm_format::annotated) {
     output << "; irre object file disassembly\n";
     output << "; entry point: 0x" << std::hex << obj.entry_offset << std::dec << "\n";
-    output << "; code size: " << obj.code.size() << " bytes (" << instructions.size() << " instructions)\n";
+    output << "; code size: " << obj.code.size() << " bytes (" << entries.size() << " instructions)\n";
     if (!obj.data.empty()) {
       output << "; data size: " << obj.data.size() << " bytes\n";
     }
     output << "\n";
   }
 
-  // disassemble each instruction
-  for (size_t i = 0; i < instructions.size(); ++i) {
+  // disassemble each entry (instruction or error)
+  for (size_t i = 0; i < entries.size(); ++i) {
     uint32_t addr = static_cast<uint32_t>(i * 4);
+    const auto& entry = entries[i];
 
-    // extract raw bytes for this instruction
-    std::vector<byte> inst_bytes;
-    if (i * 4 + 4 <= obj.code.size()) {
-      inst_bytes.assign(obj.code.begin() + i * 4, obj.code.begin() + i * 4 + 4);
+    if (entry.is_error) {
+      // Show error message with address
+      output << format_address(addr) << ": " << entry.error_msg;
+    } else {
+      // extract raw bytes for this instruction
+      std::vector<byte> inst_bytes;
+      if (i * 4 + 4 <= obj.code.size()) {
+        inst_bytes.assign(obj.code.begin() + i * 4, obj.code.begin() + i * 4 + 4);
+      }
+
+      auto line_result = disassemble_instruction(entry.inst.value(), addr, &inst_bytes);
+      if (line_result.is_err()) {
+        return line_result.error();
+      }
+
+      output << line_result.value();
     }
 
-    auto line_result = disassemble_instruction(instructions[i], addr, &inst_bytes);
-    if (line_result.is_err()) {
-      return line_result.error();
-    }
-
-    output << line_result.value();
-    if (i < instructions.size() - 1) {
+    if (i < entries.size() - 1) {
       output << "\n";
     }
   }
@@ -84,36 +126,72 @@ result<std::string, disasm_error> disassembler::disassemble_bytes(const std::vec
     return disasm_error::invalid_size;
   }
 
-  // decode instruction sequence
-  auto instructions_result = byte_utils::decode_sequence(bytes);
-  if (instructions_result.is_err()) {
-    return disasm_error::decode_failed;
+  // decode instruction sequence, handling errors gracefully
+  struct disasm_entry {
+    std::optional<instruction> inst;
+    std::string error_msg;
+    bool is_error = false;
+  };
+  
+  std::vector<disasm_entry> entries;
+  entries.reserve(bytes.size() / 4);
+  
+  for (size_t i = 0; i < bytes.size(); i += 4) {
+    auto inst_result = codec::decode_bytes(&bytes[i]);
+    if (inst_result.is_ok()) {
+      entries.push_back({inst_result.value(), "", false});
+    } else {
+      // Create an error entry for invalid instructions
+      word invalid_word = static_cast<word>(bytes[i]) | 
+                         (static_cast<word>(bytes[i+1]) << 8) |
+                         (static_cast<word>(bytes[i+2]) << 16) |
+                         (static_cast<word>(bytes[i+3]) << 24);
+      
+      std::ostringstream error_msg;
+      error_msg << "; ERROR: " << decode_error_message(inst_result.error()) 
+                << " (0x" << std::hex << std::setfill('0') << std::setw(8) << invalid_word
+                << " = " << std::hex << std::setfill('0') << std::setw(2) 
+                << static_cast<int>(bytes[i]) << " "
+                << std::hex << std::setfill('0') << std::setw(2) 
+                << static_cast<int>(bytes[i+1]) << " "
+                << std::hex << std::setfill('0') << std::setw(2) 
+                << static_cast<int>(bytes[i+2]) << " "
+                << std::hex << std::setfill('0') << std::setw(2) 
+                << static_cast<int>(bytes[i+3]) << ")";
+      
+      entries.push_back({std::nullopt, error_msg.str(), true});
+    }
   }
-
-  auto instructions = instructions_result.value();
   std::ostringstream output;
 
   // add header comment for raw bytes
   if (fmt == disasm_format::annotated) {
     output << "; raw bytes disassembly\n";
     output << "; base address: 0x" << std::hex << options_.base_address << std::dec << "\n";
-    output << "; size: " << bytes.size() << " bytes (" << instructions.size() << " instructions)\n\n";
+    output << "; size: " << bytes.size() << " bytes (" << entries.size() << " instructions)\n\n";
   }
 
-  // disassemble each instruction
-  for (size_t i = 0; i < instructions.size(); ++i) {
+  // disassemble each entry (instruction or error)
+  for (size_t i = 0; i < entries.size(); ++i) {
     uint32_t addr = options_.base_address + static_cast<uint32_t>(i * 4);
+    const auto& entry = entries[i];
 
-    // extract raw bytes for this instruction
-    std::vector<byte> inst_bytes(bytes.begin() + i * 4, bytes.begin() + i * 4 + 4);
+    if (entry.is_error) {
+      // Show error message with address
+      output << format_address(addr) << ": " << entry.error_msg;
+    } else {
+      // extract raw bytes for this instruction
+      std::vector<byte> inst_bytes(bytes.begin() + i * 4, bytes.begin() + i * 4 + 4);
 
-    auto line_result = disassemble_instruction(instructions[i], addr, &inst_bytes);
-    if (line_result.is_err()) {
-      return line_result.error();
+      auto line_result = disassemble_instruction(entry.inst.value(), addr, &inst_bytes);
+      if (line_result.is_err()) {
+        return line_result.error();
+      }
+
+      output << line_result.value();
     }
 
-    output << line_result.value();
-    if (i < instructions.size() - 1) {
+    if (i < entries.size() - 1) {
       output << "\n";
     }
   }

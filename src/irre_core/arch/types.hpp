@@ -18,7 +18,8 @@ enum class format {
   op_reg_reg,      // op rA rB - two registers
   op_reg_reg_imm8, // op rA rB v0 - two registers + 8-bit immediate
   op_reg_imm8x2,   // op rA v0 v1 - register + two 8-bit immediates
-  op_reg_reg_reg   // op rA rB rC - three registers
+  op_reg_reg_reg,  // op rA rB rC - three registers
+  invalid          // invalid opcode
 };
 
 // irre register set (37 total registers)
@@ -280,7 +281,7 @@ constexpr opcode_info get_opcode_info(opcode op) {
   case opcode::hlt:
     return {"hlt", format::op};
   default:
-    return {"???", format::op};
+    return {"???", format::invalid};
   }
 }
 

@@ -20,7 +20,22 @@ enum class runtime_error {
   division_by_zero,
   invalid_register,
   invalid_instruction,
+  misaligned_instruction,
   device_error
+};
+
+// detailed error information
+struct error_info {
+  runtime_error type;
+  address pc;
+  word instruction_word;
+  std::string message;
+  
+  error_info(runtime_error t, address addr) 
+    : type(t), pc(addr), instruction_word(0) {}
+    
+  error_info(runtime_error t, address addr, word inst_word, const std::string& msg = "")
+    : type(t), pc(addr), instruction_word(inst_word), message(msg) {}
 };
 
 // vm register file - manages all 37 irre registers
@@ -84,7 +99,7 @@ public:
 
   // callback functions for system events
   std::function<void(word)> on_interrupt;
-  std::function<void(runtime_error)> on_error;
+  std::function<void(const error_info&)> on_error;
   std::function<word(word, word, word)> on_device_access;
 
   // set execution state
@@ -93,12 +108,22 @@ public:
   // check if vm is running
   bool is_running() const { return state == execution_state::running; }
 
-  // trigger runtime error
-  void error(runtime_error err) {
+  // trigger runtime error with context
+  void error(const error_info& err) {
     state = execution_state::error;
     if (on_error) {
       on_error(err);
     }
+  }
+  
+  // convenience method for simple errors
+  void error(runtime_error err, address pc) {
+    error(error_info(err, pc));
+  }
+  
+  // backward compatibility for simple errors without address
+  void error(runtime_error err) {
+    error(error_info(err, registers.pc()));
   }
 
   // trigger interrupt

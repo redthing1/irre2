@@ -496,6 +496,12 @@ validation_result validate_instruction_operands(opcode op, const std::vector<std
       }
     }
     break;
+    
+  case format::invalid:
+    return validation_result::fail(
+        validation_error::unknown_instruction, 
+        "invalid opcode '" + std::string(get_mnemonic(op)) + "'"
+    );
   }
 
   return validation_result::ok();
@@ -628,6 +634,10 @@ validation_result process_single_instruction(
           auto reg3 = std::get<::irre::reg>(operands[2]);
           s.emit_concrete_instruction(make::op_reg_reg_reg(op, reg1, reg2, reg3));
         }
+        break;
+
+      case format::invalid:
+        // Invalid opcodes should have been caught in validation
         break;
 
       default:

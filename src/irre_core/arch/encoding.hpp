@@ -37,13 +37,8 @@ public:
 
     // validate opcode exists in our mapping
     auto info = get_opcode_info(op);
-    if (info.fmt == format::op && op != opcode::nop && op != opcode::ret && op != opcode::hlt) {
-      // if format is 'op' but opcode isn't one of the known op-only instructions,
-      // it's likely an invalid opcode
-      bool valid_op_only = (op == opcode::nop || op == opcode::ret || op == opcode::hlt);
-      if (!valid_op_only) {
-        return decode_error::invalid_opcode;
-      }
+    if (info.fmt == format::invalid) {
+      return decode_error::invalid_opcode;
     }
 
     // validate registers if present
@@ -97,6 +92,7 @@ public:
       }
       return instruction(inst_op_reg_reg_reg::decode(w));
 
+    case format::invalid:
     default:
       return decode_error::invalid_opcode;
     }

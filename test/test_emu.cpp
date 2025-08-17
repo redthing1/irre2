@@ -269,9 +269,9 @@ TEST_CASE("Error handling", "[emu][errors]") {
   bool error_occurred = false;
   runtime_error last_error;
 
-  machine.on_error([&](runtime_error err) {
+  machine.on_error([&](const error_info& err) {
     error_occurred = true;
-    last_error = err;
+    last_error = err.type;
   });
 
   SECTION("division by zero") {

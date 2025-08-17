@@ -73,8 +73,16 @@ public:
 
     // fetch instruction from pc
     address pc = state_.registers.pc();
+    
+    // check for misaligned instruction access
+    if (pc % 4 != 0) {
+      state_.error(error_info(runtime_error::misaligned_instruction, pc, 0, 
+                            "instruction fetch at unaligned address"));
+      return false;
+    }
+    
     if (!memory_.is_valid_range(pc, 4)) {
-      state_.error(runtime_error::invalid_memory_access);
+      state_.error(runtime_error::invalid_memory_access, pc);
       return false;
     }
 
@@ -83,7 +91,15 @@ public:
     // decode instruction
     auto decode_result = codec::decode(instruction_word);
     if (decode_result.is_err()) {
-      state_.error(runtime_error::invalid_instruction);
+      // Format detailed error message for invalid instruction
+      char msg[128];
+      std::snprintf(msg, sizeof(msg), "invalid instruction: 0x%08x (%02x %02x %02x %02x)", 
+                   instruction_word,
+                   static_cast<uint8_t>(instruction_word & 0xFF),
+                   static_cast<uint8_t>((instruction_word >> 8) & 0xFF),
+                   static_cast<uint8_t>((instruction_word >> 16) & 0xFF),
+                   static_cast<uint8_t>((instruction_word >> 24) & 0xFF));
+      state_.error(error_info(runtime_error::invalid_instruction, pc, instruction_word, msg));
       return false;
     }
 
@@ -139,7 +155,7 @@ public:
   // device and system handlers
   void on_interrupt(std::function<void(word)> handler) { state_.on_interrupt = std::move(handler); }
 
-  void on_error(std::function<void(runtime_error)> handler) { state_.on_error = std::move(handler); }
+  void on_error(std::function<void(const error_info&)> handler) { state_.on_error = std::move(handler); }
 
   void on_device_access(std::function<word(word, word, word)> handler) { state_.on_device_access = std::move(handler); }
 

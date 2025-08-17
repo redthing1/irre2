@@ -84,9 +84,10 @@ int main(int argc, char* argv[]) {
     return devices.access_device(device_id, command, argument);
   });
 
-  machine.on_error([](irre::emu::runtime_error err) {
-    std::cerr << "runtime error: ";
-    switch (err) {
+  machine.on_error([](const irre::emu::error_info& err) {
+    std::cerr << "runtime error at 0x" << std::hex << std::setfill('0') << std::setw(8) << err.pc << std::dec << ": ";
+    
+    switch (err.type) {
     case irre::emu::runtime_error::invalid_memory_access:
       std::cerr << "invalid memory access";
       break;
@@ -97,7 +98,21 @@ int main(int argc, char* argv[]) {
       std::cerr << "invalid register";
       break;
     case irre::emu::runtime_error::invalid_instruction:
-      std::cerr << "invalid instruction";
+      std::cerr << "invalid instruction (0x" << std::hex << std::setfill('0') << std::setw(8) << err.instruction_word
+                << " = " << std::hex << std::setfill('0') << std::setw(2) 
+                << static_cast<int>(err.instruction_word & 0xff) << " "
+                << std::hex << std::setfill('0') << std::setw(2) 
+                << static_cast<int>((err.instruction_word >> 8) & 0xff) << " "
+                << std::hex << std::setfill('0') << std::setw(2) 
+                << static_cast<int>((err.instruction_word >> 16) & 0xff) << " "
+                << std::hex << std::setfill('0') << std::setw(2) 
+                << static_cast<int>((err.instruction_word >> 24) & 0xff) << ")";
+      if (!err.message.empty()) {
+        std::cerr << " - " << err.message;
+      }
+      break;
+    case irre::emu::runtime_error::misaligned_instruction:
+      std::cerr << "misaligned instruction fetch (PC not 4-byte aligned)";
       break;
     case irre::emu::runtime_error::device_error:
       std::cerr << "device error";
