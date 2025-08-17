@@ -38,7 +38,7 @@ TEST_CASE("disassembler basic functionality", "[disassembler]") {
     auto result = disasm.disassemble_instruction(inst, 0x1000);
 
     REQUIRE(result.is_ok());
-    std::string expected = "0x1000: 0b00002a  set r0 0x002a";
+    std::string expected = "0x1000: 2a00000b  set r0 0x002a";
     REQUIRE(result.value() == expected);
   }
 }

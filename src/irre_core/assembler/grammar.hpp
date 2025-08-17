@@ -24,7 +24,7 @@ struct operand : sor<identifier, number> {};
 // directives
 struct directive_entry : seq<one<'%'>, string<'e', 'n', 't', 'r', 'y'>, opt_ws, one<':'>, opt_ws, identifier> {};
 struct directive_section : seq<one<'%'>, string<'s', 'e', 'c', 't', 'i', 'o', 'n'>, ws, identifier> {};
-struct directive_data : seq<one<'%'>, string<'d'>, ws, until<eolf>> {};
+struct directive_data : seq<one<'%'>, string<'d'>, opt_ws, until<eolf>> {};
 
 struct directive : sor<directive_entry, directive_section, directive_data> {};
 

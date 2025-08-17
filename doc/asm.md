@@ -105,16 +105,42 @@ main:
     hlt
 ```
 
-### Section Directive (Future Use)
+### Section Directive
 ```assembly
 %section code    ; Mark beginning of code section
 %section data    ; Mark beginning of data section
 ```
 
-### Data Directive (Future Use)
+### Data Directive
+The `%d` directive embeds data directly into the object file:
+
 ```assembly
-%data 0x12 0x34 0x56 0x78    ; Embed raw data bytes
+; String data
+%d "Hello, World!\n"
+
+; Numeric data (stored as 32-bit little-endian words)
+%d 42 100 $ff
+
+; Mixed string and numeric data
+%d "Message: " 0 999
+
+; Multiple data blocks
+strings:
+    %d "First string"
+numbers:
+    %d 10 20 30
 ```
+
+#### Data Types Supported:
+- **String literals**: `"text"` with escape sequences (`\n`, `\t`, `\r`, `\\`, `\"`, `\0`)
+- **Decimal numbers**: `42` or `#42`  
+- **Hexadecimal numbers**: `$ff` or `$1234`
+- **Mixed content**: Multiple values separated by spaces
+
+#### Storage Format:
+- Strings are stored as-is (UTF-8 bytes)
+- Numbers are stored as 32-bit little-endian words
+- Comments after `%d` are ignored: `%d 42 ; this is a comment`
 
 ## Instructions
 
@@ -214,8 +240,9 @@ sub r0 r1 at    ; Perform subtraction
 ```
 
 
-## Complete Program Example
+## Complete Program Examples
 
+### Fibonacci Calculator
 ```assembly
 %entry: main
 
@@ -244,6 +271,37 @@ fib_loop:
     
 done:
     hlt             ; Halt execution
+```
+
+### Program with Data Section
+```assembly
+%entry: main
+
+main:
+    ; Load string address
+    set r0 message
+    
+    ; Load array and process
+    set r1 numbers
+    ldw r2 r1 0     ; Load first number
+    ldw r3 r1 4     ; Load second number
+    add r4 r2 r3    ; Add them
+    
+    ; Store result
+    set r5 result
+    stw r4 r5 0
+    
+    hlt
+
+; Data section
+message:
+    %d "Hello, IRRE v2.0!\n"
+
+numbers:
+    %d 25 17        ; Two numbers to add
+
+result:
+    %d 0            ; Space for result
 ```
 
 ## Error Handling

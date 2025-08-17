@@ -646,4 +646,92 @@ validation_result process_single_instruction(
   return validation_result::ok();
 }
 
+result<std::vector<uint8_t>, std::string> parse_data_content(const std::string& data_str) {
+  std::vector<uint8_t> result;
+  size_t i = 0;
+  
+  while (i < data_str.length()) {
+    // Skip whitespace
+    while (i < data_str.length() && std::isspace(data_str[i])) {
+      i++;
+    }
+    
+    if (i >= data_str.length()) {
+      break;
+    }
+    
+    // Stop at comment
+    if (data_str[i] == ';') {
+      break;
+    }
+    
+    if (data_str[i] == '"') {
+      // Parse string literal
+      i++; // skip opening quote
+      while (i < data_str.length() && data_str[i] != '"') {
+        if (data_str[i] == '\\' && i + 1 < data_str.length()) {
+          // Handle escape sequences
+          i++;
+          switch (data_str[i]) {
+          case 'n':
+            result.push_back('\n');
+            break;
+          case 't':
+            result.push_back('\t');
+            break;
+          case 'r':
+            result.push_back('\r');
+            break;
+          case '\\':
+            result.push_back('\\');
+            break;
+          case '"':
+            result.push_back('"');
+            break;
+          case '0':
+            result.push_back('\0');
+            break;
+          default:
+            return std::string("invalid escape sequence: \\" + std::string(1, data_str[i]));
+          }
+        } else {
+          result.push_back(static_cast<uint8_t>(data_str[i]));
+        }
+        i++;
+      }
+      
+      if (i >= data_str.length()) {
+        return std::string("unterminated string literal");
+      }
+      
+      i++; // skip closing quote
+    } else {
+      // Parse numeric value
+      size_t start = i;
+      
+      // Find end of token
+      while (i < data_str.length() && !std::isspace(data_str[i])) {
+        i++;
+      }
+      
+      std::string token = data_str.substr(start, i - start);
+      auto imm_result = parse_immediate(token);
+      
+      if (imm_result.is_err()) {
+        return std::string("invalid number: " + token + " (" + imm_result.error() + ")");
+      }
+      
+      uint32_t value = imm_result.value();
+      
+      // Store as little-endian 32-bit word
+      result.push_back(static_cast<uint8_t>(value & 0xFF));
+      result.push_back(static_cast<uint8_t>((value >> 8) & 0xFF));
+      result.push_back(static_cast<uint8_t>((value >> 16) & 0xFF));
+      result.push_back(static_cast<uint8_t>((value >> 24) & 0xFF));
+    }
+  }
+  
+  return result;
+}
+
 } // namespace irre::assembler::actions

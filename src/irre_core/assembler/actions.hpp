@@ -75,6 +75,7 @@ std::vector<std::vector<std::string>> expand_pseudo_instruction(
 validation_result process_single_instruction(
     parse_state& s, const std::string& mnemonic, const std::vector<std::string>& operand_strs
 );
+result<std::vector<uint8_t>, std::string> parse_data_content(const std::string& data_str);
 
 // default action - do nothing
 template <typename Rule> struct action {};
@@ -120,9 +121,36 @@ template <> struct action<grammar::directive_section> {
 template <> struct action<grammar::directive_data> {
   template <typename Input> static void apply(const Input& in, parse_state& s) {
     std::string text = in.string();
-    // For now, just emit placeholder data
-    std::vector<uint8_t> data = {0x00}; // placeholder
-    s.emit_data(data);
+    
+    // Find the start of data content after "%d"
+    size_t start_pos = text.find("%d");
+    if (start_pos == std::string::npos) {
+      s.add_error(validation_result::fail(validation_error::invalid_immediate, "malformed data directive"));
+      return;
+    }
+    
+    // Skip "%d" and any whitespace
+    start_pos += 2;
+    while (start_pos < text.length() && std::isspace(text[start_pos])) {
+      start_pos++;
+    }
+    
+    if (start_pos >= text.length()) {
+      // Empty data directive
+      s.emit_data(std::vector<uint8_t>());
+      return;
+    }
+    
+    std::string data_content = text.substr(start_pos);
+    auto parse_result = parse_data_content(data_content);
+    
+    if (parse_result.is_err()) {
+      s.add_error(validation_result::fail(validation_error::invalid_immediate, 
+                                         "data parsing error: " + parse_result.error()));
+      return;
+    }
+    
+    s.emit_data(parse_result.value());
   }
 };
 

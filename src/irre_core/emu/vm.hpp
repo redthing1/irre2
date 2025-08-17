@@ -31,9 +31,17 @@ public:
     // clear memory first
     memory_.clear();
 
-    // load code section
+    address current_address = 0;
+
+    // load code section at address 0
     if (!obj.code.empty()) {
-      memory_.load_data(0, obj.code);
+      memory_.load_data(current_address, obj.code);
+      current_address += static_cast<address>(obj.code.size());
+    }
+
+    // load data section immediately after code
+    if (!obj.data.empty()) {
+      memory_.load_data(current_address, obj.data);
     }
 
     // set entry point

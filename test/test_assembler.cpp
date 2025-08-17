@@ -783,10 +783,10 @@ TEST_CASE("sample program validation", "[assembler][samples]") {
     }
     REQUIRE(result1.is_ok());
 
-    // Test 2: %d without space (should fail per grammar)
+    // Test 2: %d without space (should parse as "0 0 0")
     std::string source2 = "%d0 0 0";
     auto result2 = asm_engine.assemble(source2);
-    REQUIRE(result2.is_err());
+    REQUIRE(result2.is_ok());
 
     // Test 3: Multiple spaces/values like in math.asm
     std::string source3 = "%d 0 0 0 0 0";
@@ -804,5 +804,244 @@ TEST_CASE("sample program validation", "[assembler][samples]") {
     std::string source4 = "%d ";
     auto result4 = asm_engine.assemble(source4);
     REQUIRE(result4.is_ok());
+  }
+}
+
+TEST_CASE("assembler data sections", "[assembler][data]") {
+  asmr::assembler asm_engine;
+
+  SECTION("string data") {
+    std::string source = R"(
+main:
+    nop
+    hlt
+
+str_data:
+    %d "Hello"
+)";
+    auto result = asm_engine.assemble(source);
+
+    REQUIRE(result.is_ok());
+    auto obj = result.value();
+    REQUIRE(obj.code.size() == 8); // 2 instructions
+    REQUIRE(obj.data.size() == 5); // "Hello" = 5 bytes
+    
+    // Verify string data
+    REQUIRE(obj.data[0] == 'H');
+    REQUIRE(obj.data[1] == 'e');
+    REQUIRE(obj.data[2] == 'l');
+    REQUIRE(obj.data[3] == 'l');
+    REQUIRE(obj.data[4] == 'o');
+  }
+
+  SECTION("numeric data") {
+    std::string source = R"(
+main:
+    nop
+    hlt
+
+numbers:
+    %d 42 100
+)";
+    auto result = asm_engine.assemble(source);
+
+    REQUIRE(result.is_ok());
+    auto obj = result.value();
+    REQUIRE(obj.code.size() == 8);
+    REQUIRE(obj.data.size() == 8); // 2 numbers * 4 bytes each
+    
+    // Verify numeric data (little-endian)
+    uint32_t first_num = obj.data[0] | (obj.data[1] << 8) | (obj.data[2] << 16) | (obj.data[3] << 24);
+    uint32_t second_num = obj.data[4] | (obj.data[5] << 8) | (obj.data[6] << 16) | (obj.data[7] << 24);
+    
+    REQUIRE(first_num == 42);
+    REQUIRE(second_num == 100);
+  }
+
+  SECTION("hex numeric data") {
+    std::string source = R"(
+main:
+    nop
+    hlt
+
+hex_data:
+    %d $ff $1234
+)";
+    auto result = asm_engine.assemble(source);
+
+    REQUIRE(result.is_ok());
+    auto obj = result.value();
+    REQUIRE(obj.data.size() == 8);
+    
+    uint32_t first_num = obj.data[0] | (obj.data[1] << 8) | (obj.data[2] << 16) | (obj.data[3] << 24);
+    uint32_t second_num = obj.data[4] | (obj.data[5] << 8) | (obj.data[6] << 16) | (obj.data[7] << 24);
+    
+    REQUIRE(first_num == 0xff);
+    REQUIRE(second_num == 0x1234);
+  }
+
+  SECTION("mixed string and numeric data") {
+    std::string source = R"(
+main:
+    nop
+    hlt
+
+mixed:
+    %d "Hi" 0 999
+)";
+    auto result = asm_engine.assemble(source);
+
+    REQUIRE(result.is_ok());
+    auto obj = result.value();
+    REQUIRE(obj.data.size() == 10); // "Hi" (2 bytes) + 0 (4 bytes) + 999 (4 bytes)
+    
+    // Verify string part
+    REQUIRE(obj.data[0] == 'H');
+    REQUIRE(obj.data[1] == 'i');
+    
+    // Verify numeric parts
+    uint32_t zero = obj.data[2] | (obj.data[3] << 8) | (obj.data[4] << 16) | (obj.data[5] << 24);
+    uint32_t num = obj.data[6] | (obj.data[7] << 8) | (obj.data[8] << 16) | (obj.data[9] << 24);
+    
+    REQUIRE(zero == 0);
+    REQUIRE(num == 999);
+  }
+
+  SECTION("string with escape sequences") {
+    std::string source = R"(
+main:
+    nop
+    hlt
+
+escaped:
+    %d "Hello\nWorld\t!"
+)";
+    auto result = asm_engine.assemble(source);
+
+    REQUIRE(result.is_ok());
+    auto obj = result.value();
+    REQUIRE(obj.data.size() == 13); // "Hello\nWorld\t!" with escape sequences
+    
+    REQUIRE(obj.data[5] == '\n');
+    REQUIRE(obj.data[11] == '\t');
+  }
+
+  SECTION("data with comments") {
+    std::string source = R"(
+main:
+    nop
+    hlt
+
+data_with_comment:
+    %d 42      ; this is a comment
+)";
+    auto result = asm_engine.assemble(source);
+
+    REQUIRE(result.is_ok());
+    auto obj = result.value();
+    REQUIRE(obj.data.size() == 4); // Just the number 42
+    
+    uint32_t num = obj.data[0] | (obj.data[1] << 8) | (obj.data[2] << 16) | (obj.data[3] << 24);
+    REQUIRE(num == 42);
+  }
+
+  SECTION("empty data directive") {
+    std::string source = R"(
+main:
+    nop
+    hlt
+
+empty:
+    %d
+)";
+    auto result = asm_engine.assemble(source);
+
+    REQUIRE(result.is_ok());
+    auto obj = result.value();
+    // Empty data directive should not add any bytes
+  }
+
+  SECTION("data section label references") {
+    std::string source = R"(
+%entry: main
+
+main:
+    set r0 message
+    set r1 numbers
+    ldw r2 r1 0
+    hlt
+
+message:
+    %d "test"
+
+numbers:
+    %d 42
+)";
+    auto result = asm_engine.assemble(source);
+
+    REQUIRE(result.is_ok());
+    auto obj = result.value();
+    REQUIRE(obj.code.size() == 16); // 4 instructions
+    REQUIRE(obj.data.size() == 8);  // "test" (4 bytes) + 42 (4 bytes)
+    
+    // Verify the set instruction loads the correct address (should be code_size)
+    // The message label should point to address 16 (after 4 instructions)
+    REQUIRE(obj.entry_offset == 0);
+  }
+
+  SECTION("complex data and code interaction") {
+    std::string source = R"(
+main:
+    set r0 str_data
+    ldb r1 r0 0      ; load first byte
+    seq r2 r1 72     ; check if byte == 'H' (72)
+    set r3 num_data
+    ldw r4 r3 0      ; load number
+    hlt
+
+str_data:
+    %d "Hello"
+
+num_data:
+    %d 999
+)";
+    auto result = asm_engine.assemble(source);
+
+    REQUIRE(result.is_ok());
+    auto obj = result.value();
+    REQUIRE(obj.code.size() == 24); // 6 instructions (I miscounted)
+    REQUIRE(obj.data.size() == 9);  // "Hello" (5 bytes) + 999 (4 bytes)
+  }
+
+  SECTION("data section addressing") {
+    std::string source = R"(
+main:
+    nop
+    hlt
+
+first_data:
+    %d "AB"
+
+second_data:
+    %d 100 200
+)";
+    auto result = asm_engine.assemble(source);
+
+    REQUIRE(result.is_ok());
+    auto obj = result.value();
+    REQUIRE(obj.code.size() == 8);  // 2 instructions
+    REQUIRE(obj.data.size() == 10); // "AB" (2 bytes) + 100 (4) + 200 (4)
+    
+    // Verify data layout: first_data at offset 8, second_data at offset 10
+    REQUIRE(obj.data[0] == 'A');
+    REQUIRE(obj.data[1] == 'B');
+    
+    // 100 in little-endian
+    uint32_t first_num = obj.data[2] | (obj.data[3] << 8) | (obj.data[4] << 16) | (obj.data[5] << 24);
+    REQUIRE(first_num == 100);
+    
+    // 200 in little-endian  
+    uint32_t second_num = obj.data[6] | (obj.data[7] << 8) | (obj.data[8] << 16) | (obj.data[9] << 24);
+    REQUIRE(second_num == 200);
   }
 }

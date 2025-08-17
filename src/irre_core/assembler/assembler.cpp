@@ -30,9 +30,13 @@ irre::result<object_file, assembly_error> assembler::assemble(const std::string&
   // step 3: encode instructions to binary
   auto code_bytes = encode_instructions(instructions);
 
-  // step 4: build object file
+  // step 4: collect data blocks
+  auto data_bytes = collect_data_blocks(state.items);
+
+  // step 5: build object file
   object_file obj;
   obj.code = std::move(code_bytes);
+  obj.data = std::move(data_bytes);
 
   // set entry point if specified
   if (!state.entry_label.empty()) {
@@ -123,6 +127,19 @@ std::vector<byte> assembler::encode_instructions(const std::vector<instruction>&
   for (const auto& inst : instructions) {
     auto bytes = codec::encode_bytes(inst);
     result.insert(result.end(), bytes.begin(), bytes.end());
+  }
+
+  return result;
+}
+
+std::vector<byte> assembler::collect_data_blocks(const std::vector<asm_item>& items) {
+  std::vector<byte> result;
+
+  for (const auto& item : items) {
+    if (std::holds_alternative<data_block>(item)) {
+      const auto& data = std::get<data_block>(item);
+      result.insert(result.end(), data.bytes.begin(), data.bytes.end());
+    }
   }
 
   return result;

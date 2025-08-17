@@ -74,6 +74,9 @@ private:
 
   // encode instructions to binary
   std::vector<byte> encode_instructions(const std::vector<instruction>& instructions);
+  
+  // collect data blocks from assembly items
+  std::vector<byte> collect_data_blocks(const std::vector<asm_item>& items);
 };
 
 } // namespace irre::assembler
