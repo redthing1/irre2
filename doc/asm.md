@@ -111,6 +111,20 @@ main:
 %section data    ; Mark beginning of data section
 ```
 
+**Note:** Data sections must be placed at the end of the file after all code for correct symbol resolution.
+
+```assembly
+%entry: main
+
+main:
+    set r0 mydata
+    hlt
+
+%section data
+mydata:
+    %d 42
+```
+
 ### Data Directive
 The `%d` directive embeds data directly into the object file:
 

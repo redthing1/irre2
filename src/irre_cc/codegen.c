@@ -995,6 +995,33 @@ static void gen_logical(Node *node) {
     }
 }
 
+// Generate code for ternary conditional operator (condition ? true_expr : false_expr)
+static void gen_ternary(Node *node) {
+    int false_label = label_counter++;
+    int end_label = label_counter++;
+    
+    // Generate condition
+    gen_expr(node->cond);
+    
+    // If condition is false, jump to false expression
+    emit_comment("Ternary condition test");
+    emit("    set r31 %s", format("_L_ternary_false_%d", false_label));
+    emit("    bve r31 r0 #0       ; branch if condition is false");
+    
+    // Generate true expression
+    emit_comment("Ternary true expression");
+    gen_expr(node->then);
+    emit("    jmi %s", format("_L_ternary_end_%d", end_label));
+    
+    // Generate false expression
+    emit_label(format("_L_ternary_false_%d", false_label));
+    emit_comment("Ternary false expression");
+    gen_expr(node->els);
+    
+    // End label
+    emit_label(format("_L_ternary_end_%d", end_label));
+}
+
 // Main expression generator
 static void gen_expr(Node *node) {
     if (!node) return;
@@ -1072,6 +1099,18 @@ static void gen_expr(Node *node) {
             // Type cast - generate the expression and convert types
             gen_expr(node->lhs);                           // Generate the expression to cast
             gen_type_cast(node->lhs->ty, node->ty);        // Convert from source to dest type
+            break;
+            
+        case ND_COND:
+            gen_ternary(node);
+            break;
+            
+        case ND_COMMA:
+            // Comma operator: evaluate left, discard result, return right
+            emit_comment("Comma operator: evaluate left expression");
+            gen_expr(node->lhs);                           // Generate and discard left expression
+            emit_comment("Comma operator: evaluate right expression");
+            gen_expr(node->rhs);                           // Generate right expression (result)
             break;
             
         default:
@@ -1480,29 +1519,27 @@ static void gen_globals(Obj *prog) {
     
     emit("");
     emit_section_comment("Global Variables Data Section");
-    emit("%%section: .data");
+    emit("%%section data");
     emit("");
     
-    // Generate each global variable
+    // Generate each global variable (skip string literals which start with .L..)
     for (Obj *var = prog; var; var = var->next) {
         if (!var->is_function && !var->is_local) {
+            // Skip string literals (generated automatically by string processing)
+            if (var->name && strncmp(var->name, ".L..", 4) == 0) {
+                continue;
+            }
+            
             emit_comment("Global variable: %s (%d bytes)", var->name, var->ty->size);
             emit_label(var->name);
             
             if (var->init_data) {
-                // TODO: Handle initialized global variables
+                // TODO: Handle initialized global variables properly
                 emit_comment("Initialized data not yet implemented");
-                emit("    .word 0             ; placeholder for initialized data");
+                emit("    %%d 0               ; placeholder for initialized data");
             } else {
                 // Zero-initialized global variable
-                if (var->ty->size == 4) {
-                    emit("    .word 0             ; 4-byte global variable");
-                } else if (var->ty->size == 1) {
-                    emit("    .byte 0             ; 1-byte global variable");
-                } else {
-                    // Multi-byte variables - reserve space
-                    emit("    .space %d           ; %d-byte global variable", var->ty->size, var->ty->size);
-                }
+                emit("    %%d 0               ; %d-byte global variable", var->ty->size);
             }
             emit("");
         }
@@ -1545,15 +1582,16 @@ void codegen(Obj *prog, FILE *out) {
         emit("");
     }
     
-    // Generate global variables data section
-    gen_globals(prog);
-    
-    // Generate all functions
+    // Generate all functions FIRST
     for (Obj *func = prog; func; func = func->next) {
         if (func->is_function) {
             gen_function(func);
         }
     }
+    
+    // Generate global variables data section LAST
+    // CRITICAL: Data section MUST come after ALL code for correct symbol resolution
+    gen_globals(prog);
     
     emit("");
     emit_comment("End of generated code");
