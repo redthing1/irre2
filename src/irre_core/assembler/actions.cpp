@@ -304,15 +304,29 @@ bool is_immediate(const std::string& str) { return str[0] == '#' || str[0] == '$
 bool is_pseudo_instruction(const std::string& mnemonic) { return mnemonic == "adi" || mnemonic == "sbi"; }
 
 validation_result validate_immediate_range(uint32_t value, size_t bits) {
-  uint32_t max_value = (1u << bits) - 1;
-  if (value > max_value) {
-    return validation_result::fail(
-        validation_error::immediate_out_of_range, "immediate value " + std::to_string(value) + " exceeds " +
-                                                      std::to_string(bits) + "-bit range (max " +
-                                                      std::to_string(max_value) + ")"
-    );
+  uint32_t max_unsigned = (1u << bits) - 1;
+  
+  // Check if value fits in unsigned range [0, 2^bits - 1]
+  if (value <= max_unsigned) {
+    return validation_result::ok();
   }
-  return validation_result::ok();
+  
+  // Check if value represents a negative number in two's complement
+  // For negative values: 2^32 - 2^(bits-1) <= value <= 2^32 - 1
+  uint32_t min_negative = UINT32_MAX - ((1u << (bits - 1)) - 1);
+  if (value >= min_negative) {
+    return validation_result::ok();
+  }
+  
+  // Value is out of range for both signed and unsigned interpretation
+  int32_t signed_value = static_cast<int32_t>(value);
+  return validation_result::fail(
+      validation_error::immediate_out_of_range, 
+      "immediate value " + std::to_string(signed_value) + " exceeds " +
+      std::to_string(bits) + "-bit range (valid: -" + 
+      std::to_string(1u << (bits - 1)) + " to " + 
+      std::to_string(max_unsigned) + ")"
+  );
 }
 
 validation_result validate_instruction_operands(opcode op, const std::vector<std::string>& operands) {

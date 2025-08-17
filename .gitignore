@@ -1,6 +1,7 @@
 *.bin
 *.o
 *.obj
+*.s
 
 /irre-tools
 
