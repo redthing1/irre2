@@ -81,11 +81,11 @@ class IRRE2Architecture(Architecture):
         ),
         Opcode.JMP: lambda info, ops, addr: info.add_branch(BranchType.IndirectBranch),
         Opcode.BVE: lambda info, ops, addr: [
-            info.add_branch(BranchType.TrueBranch),
+            info.add_branch(BranchType.IndirectBranch),
             info.add_branch(BranchType.FalseBranch, addr + INSTRUCTION_SIZE),
         ],
         Opcode.BVN: lambda info, ops, addr: [
-            info.add_branch(BranchType.TrueBranch),
+            info.add_branch(BranchType.IndirectBranch),
             info.add_branch(BranchType.FalseBranch, addr + INSTRUCTION_SIZE),
         ],
         Opcode.CAL: lambda info, ops, addr: info.add_branch(BranchType.CallDestination),
