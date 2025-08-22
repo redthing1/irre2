@@ -4,6 +4,7 @@
 *.s
 
 /irre-tools
+temp
 
 .vscode
 .claude
