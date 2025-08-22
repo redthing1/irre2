@@ -498,13 +498,8 @@ class IRRE2Lifter:
 
     def _lift_ret(self, operands) -> int:
         """Lift RET instruction: return (pc = lr; lr = 0)"""
-        # IRRE2 spec: "Return: pc = lr; lr = 0"
-        # save lr value before clearing it
-        lr_value = self.il.reg(4, "lr")
-
-        # clear lr register and return in sequence
-        self.il.append(self.il.ret(lr_value))
-        self.il.append(self.il.set_reg(4, "lr", self.il.const(4, 0)))
+        lr_reg = self.il.reg(4, "lr")
+        self.il.append(self.il.ret(lr_reg))
         return self.INSTRUCTION_LENGTH
 
     def _lift_tcu(self, operands) -> int:
