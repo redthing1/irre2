@@ -23,13 +23,13 @@ class DecodedInstruction(NamedTuple):
     opcode: Opcode
     format: Format
     mnemonic: str
-    operands: tuple  # Operands depend on format
+    operands: tuple  # format-dependent operands
 
 
 class InstructionDecoder:
     """IRRE2 instruction decoder"""
 
-    # Operand decoders for each format
+    # operand decoders for each format
     _DECODERS = {
         Format.OP: lambda w, a1, a2, a3: (),
         Format.OP_REG: lambda w, a1, a2, a3: (Reg(a1),) if is_valid_reg(a1) else None,
@@ -69,21 +69,21 @@ class InstructionDecoder:
     def decode_word(word: int) -> Optional[DecodedInstruction]:
         """Decode instruction from 32-bit word"""
         try:
-            # Extract opcode and validate
+            # extract opcode and validate
             opcode_val = (word >> 24) & 0xFF
             opcode = Opcode(opcode_val)
         except ValueError:
             return None
 
-        # Get opcode info
+        # get opcode info
         opcode_info = get_opcode_info(opcode)
         if not opcode_info:
             return None
 
-        # Extract operand fields
+        # extract operand fields
         a1, a2, a3 = (word >> 16) & 0xFF, (word >> 8) & 0xFF, word & 0xFF
 
-        # Decode operands using lookup table
+        # decode operands using lookup table
         decoder = InstructionDecoder._DECODERS.get(opcode_info.format)
         if not decoder:
             return None
@@ -99,7 +99,7 @@ class InstructionDecoder:
             operands=operands,
         )
 
-    # Format functions for each instruction format
+    # format functions for each instruction format
     _FORMATTERS = {
         Format.OP: lambda ops: [],
         Format.OP_REG: lambda ops: [get_reg_name(ops[0])],

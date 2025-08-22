@@ -45,11 +45,11 @@ class IRRE2Architecture(Architecture):
     instr_alignment = INSTRUCTION_ALIGNMENT
     max_instr_length = INSTRUCTION_SIZE
 
-    # Define stack pointer and link register
+    # sp and lr
     stack_pointer = "sp"
     link_reg = "lr"
 
-    # Register definitions - set as class attribute following DUMB pattern
+    # reg defs
     regs = {name: RegisterInfo(name, 4) for name in REG_NAMES.values()}
 
     def _decode_instruction(self, data: bytes) -> Optional[DecodedInstruction]:
@@ -74,7 +74,7 @@ class IRRE2Architecture(Architecture):
 
         return info
 
-    # Branch info mapping for opcodes
+    # branch info
     _BRANCH_HANDLERS = {
         Opcode.JMI: lambda info, ops, addr: info.add_branch(
             BranchType.UnconditionalBranch, ops[0]
@@ -117,14 +117,14 @@ class IRRE2Architecture(Architecture):
         """Generate instruction text tokens for syntax highlighting"""
         tokens = []
 
-        # Instruction mnemonic
+        # mnem
         tokens.append(
             InstructionTextToken(
                 InstructionTextTokenType.InstructionToken, decoded.mnemonic
             )
         )
 
-        # Add operands if present
+        # operands
         if decoded.operands:
             tokens.append(InstructionTextToken(InstructionTextTokenType.TextToken, " "))
 
@@ -152,7 +152,7 @@ class IRRE2Architecture(Architecture):
             ]
 
         elif isinstance(operand, int):
-            # Check if this is an address operand (24-bit immediate or 16-bit immediate in certain contexts)
+            # check if this is an address operand (24-bit/16-bit)
             is_address = fmt == Format.OP_IMM24 or (
                 fmt == Format.OP_REG_IMM16 and operand_index == 1
             )
@@ -179,7 +179,7 @@ class IRRE2Architecture(Architecture):
     def get_instruction_low_level_il(
         self, data: bytes, addr: int, il: LowLevelILFunction
     ) -> Optional[int]:
-        """Lift instruction to Low Level IL"""
+        """Lift instruction to LLIL"""
         decoded = self._decode_instruction(data)
         if not decoded:
             return None
@@ -188,5 +188,4 @@ class IRRE2Architecture(Architecture):
         return lifter.lift_instruction(decoded)
 
 
-# Register the architecture
 IRRE2Architecture.register()
